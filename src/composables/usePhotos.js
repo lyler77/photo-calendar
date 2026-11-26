@@ -73,6 +73,20 @@ export function usePhotos({ yearRef, monthRef, getStyleSnapshot, onSaveError } =
     return photos[dateKey]
   }
 
+  function addPreparedPhotos(entries) {
+    // 所有图片已在调用方完成压缩；这里一次性写入并只触发一次草稿保存
+    for (const entry of entries) {
+      if (photos[entry.dateKey]?.url) URL.revokeObjectURL(photos[entry.dateKey].url)
+      photos[entry.dateKey] = {
+        blob: entry.blob,
+        url: URL.createObjectURL(entry.blob),
+        width: entry.width,
+        height: entry.height
+      }
+    }
+    scheduleSave()
+  }
+
   function removePhoto(dateKey) {
     if (photos[dateKey]?.url) {
       URL.revokeObjectURL(photos[dateKey].url)
@@ -86,5 +100,5 @@ export function usePhotos({ yearRef, monthRef, getStyleSnapshot, onSaveError } =
     Object.values(photos).forEach(p => p.url && URL.revokeObjectURL(p.url))
   })
 
-  return { photos, ready, init, addPhoto, removePhoto, scheduleSave }
+  return { photos, ready, init, addPhoto, addPreparedPhotos, removePhoto, scheduleSave }
 }
