@@ -167,7 +167,7 @@ async function drawBackground(ctx, style, template, w, h) {
       drawCover(ctx, bgBmp, 0, 0, w, h)
       bgBmp.close()
     } catch (e) {}
-    ctx.fillStyle = `rgba(0, 0, 0, ${style.backgroundOverlayOpacity || 0.5})`
+    ctx.fillStyle = `rgba(0, 0, 0, ${style.backgroundOverlayOpacity ?? 0.5})`
     ctx.fillRect(0, 0, w, h)
   } else {
     ctx.fillStyle = style.backgroundColor || template.backgroundColor
