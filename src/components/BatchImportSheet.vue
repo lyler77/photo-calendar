@@ -47,14 +47,14 @@ function assignMissingDates() {
   const occupied = new Set(props.existingKeys)
   // EXIF 日期优先，若撞上已有照片或其他导入照片，保留日期并提示用户手动处理
   for (const item of localItems.value) {
-    if (item.shotDate) item.targetDate = item.shotDate
+    if (item.shotDate && !item.manualDate) item.targetDate = item.shotDate
   }
   for (const item of localItems.value) {
-    if (item.shotDate && item.targetDate) occupied.add(item.targetDate)
+    if (item.targetDate) occupied.add(item.targetDate)
   }
   let cursor = startDate.value || todayKey()
   for (const item of localItems.value) {
-    if (item.shotDate || item.error) continue
+    if (item.shotDate || item.manualDate || item.error) continue
     while (occupied.has(cursor)) cursor = nextKey(cursor)
     item.targetDate = cursor
     occupied.add(cursor)
@@ -79,6 +79,7 @@ const readyCount = computed(() => localItems.value.length - invalidCount.value)
 
 function updateItem(index, field, value) {
   localItems.value[index][field] = value
+  if (field === 'targetDate') localItems.value[index].manualDate = true
   emit('update:items', localItems.value.map(item => ({ ...item })))
 }
 function moveItem(from, to) {
@@ -124,8 +125,8 @@ function onPointerUp() {
 }
 function formatShotDate(value) {
   if (!value) return ''
-  const d = new Date(value)
-  return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日'
+  const [year, month, day] = value.split('-').map(Number)
+  return year + '年' + month + '月' + day + '日'
 }
 function confirm() {
   if (invalidCount.value || props.busy) return
