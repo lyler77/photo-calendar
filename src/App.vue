@@ -300,11 +300,6 @@ async function copyCaption() {
   }
 }
 
-function submitSurvey(price) {
-  track('ai_willingness', { price })
-  showSnackbar('感谢反馈！', '', null, 2000)
-}
-
 function showPrivacy() {
   alert('照片和作品只保存在你当前使用的手机或电脑浏览器中，不会上传到服务器。清理浏览器数据或更换设备可能导致作品丢失，建议及时导出保存。')
 }
@@ -376,7 +371,6 @@ function showPrivacy() {
       @change-type="onChangeExportType"
       @save="saveExport"
       @copy="copyCaption"
-      @submit-survey="submitSurvey"
       @close="exportVisible = false"
     />
 
