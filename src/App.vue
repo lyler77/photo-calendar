@@ -6,18 +6,24 @@ import PhotoViewer from './components/PhotoViewer.vue'
 import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
 import ExportSheet from './components/ExportSheet.vue'
+import BatchImportSheet from './components/BatchImportSheet.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
 import { readShotTime } from './composables/useExif'
 import { renderMonth, renderYear } from './composables/useExport'
 import { track } from './composables/useTrack'
+import { compressImage } from './composables/useImage'
 
 const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
 
 const fileInput = ref(null)
+const batchFileInput = ref(null)
+const batchVisible = ref(false)
+const batchBusy = ref(false)
+const batchItems = ref([])
 const pickingDateKey = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
@@ -38,7 +44,7 @@ const {
   applyLoaded, getSnapshot
 } = useStyle()
 
-const { photos, init, addPhoto, removePhoto, scheduleSave } = usePhotos({
+const { photos, init, addPhoto, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
   yearRef: year,
   monthRef: month,
   getStyleSnapshot: getSnapshot,
@@ -122,6 +128,93 @@ function onSnackbarAction() {
 function openPicker(dateKey) {
   pickingDateKey.value = dateKey
   fileInput.value?.click()
+}
+
+function openBatchPicker() {
+  batchFileInput.value?.click()
+}
+
+function releaseBatchPreviews() {
+  for (const item of batchItems.value) {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  }
+  batchItems.value = []
+}
+
+async function onBatchFileChange(event) {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  if (!files.length) return
+
+  releaseBatchPreviews()
+  showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
+
+  // Promise.all 保留原始选择顺序，即使 EXIF 读取耗时不同
+  const results = await Promise.all(files.map(async (file, index) => {
+    const shotDate = await readShotTime(file)
+    return {
+      id: 'batch-' + Date.now() + '-' + index,
+      file,
+      name: file.name || ('照片 ' + (index + 1)),
+      previewUrl: URL.createObjectURL(file),
+      shotDate: shotDate ? formatDateKey(shotDate.getFullYear(), shotDate.getMonth() + 1, shotDate.getDate()) : '',
+      targetDate: '',
+      error: ''
+    }
+  }))
+
+  batchItems.value = results
+  batchVisible.value = true
+  closeSnackbar()
+}
+
+function updateBatchItems(items) {
+  batchItems.value = items
+}
+
+function closeBatch() {
+  if (batchBusy.value) return
+  batchVisible.value = false
+  releaseBatchPreviews()
+}
+
+async function confirmBatchImport(items) {
+  const seen = new Set()
+  for (const item of items) {
+    if (!item.targetDate || photos[item.targetDate] || seen.has(item.targetDate)) {
+      showSnackbar('有照片日期冲突，请调整后再导入')
+      return
+    }
+    seen.add(item.targetDate)
+  }
+
+  batchBusy.value = true
+  showSnackbar('正在处理照片，请稍候…', '', null, 10000)
+  try {
+    const results = await Promise.all(items.map(async item => {
+      try {
+        const image = await compressImage(item.file, 2000)
+        return { dateKey: item.targetDate, ...image, error: '' }
+      } catch (error) {
+        return { dateKey: item.targetDate, error: error?.message || '图片处理失败' }
+      }
+    }))
+    const succeeded = results.filter(item => !item.error)
+    if (succeeded.length) addPreparedPhotos(succeeded)
+    const failed = results.length - succeeded.length
+    track('photo_batch_import', { count: succeeded.length, failed })
+    batchVisible.value = false
+    releaseBatchPreviews()
+    showSnackbar(
+      failed ? '成功导入 ' + succeeded.length + ' 张，' + failed + ' 张失败' : '已导入 ' + succeeded.length + ' 张照片',
+      '', null, 3500
+    )
+  } catch (err) {
+    console.error('批量导入失败', err)
+    showSnackbar('照片处理失败，请减少数量或检查图片格式后重试', '', null, 4000)
+  } finally {
+    batchBusy.value = false
+  }
 }
 function onCellClick(dateKey) {
   if (photos[dateKey]) selectedDateKey.value = dateKey
@@ -339,7 +432,11 @@ function showPrivacy() {
       @cell-click="onCellClick"
     />
 
+    <div class="import-actions">
+      <button class="batch-import-btn" @click="openBatchPicker">批量导入照片</button>
+    </div>
     <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
+    <input ref="batchFileInput" type="file" accept="image/*" multiple hidden @change="onBatchFileChange" />
 
     <p class="footer-note" :style="{ color: themeSubColor }">
       作品仅保存在本机浏览器，<span style="text-decoration:underline;cursor:pointer" @click="showPrivacy">隐私说明</span>
@@ -349,6 +446,17 @@ function showPrivacy() {
       <button class="bar-btn" @click="styleDrawerVisible = true">样式</button>
       <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
+
+    <BatchImportSheet
+      :visible="batchVisible"
+      :items="batchItems"
+      :existing-keys="Object.keys(photos)"
+      :initial-date="year + '-' + String(month).padStart(2, '0') + '-01'"
+      :busy="batchBusy"
+      @update:items="updateBatchItems"
+      @confirm="confirmBatchImport"
+      @close="closeBatch"
+    />
 
     <StyleDrawer
       :visible="styleDrawerVisible"
@@ -404,6 +512,8 @@ function showPrivacy() {
 .title { font-size: 18px; font-weight: 600; }
 .subtitle { font-size: 12px; margin-top: 2px; }
 .hint { font-size: 12px; text-align: center; margin: 4px 0 10px; }
+.import-actions { display:flex; justify-content:center; margin: 8px 0 12px; }
+.batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:8px 16px; border-radius:18px; font-size:12px; cursor:pointer; }
 .footer-note { font-size: 11px; text-align: center; margin-top: 16px; }
 .bottom-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; gap: 10px; }
 .bar-btn { padding: 12px 28px; border: none; border-radius: 24px; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
