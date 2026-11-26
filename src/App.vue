@@ -7,6 +7,7 @@ import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
 import ExportSheet from './components/ExportSheet.vue'
 import BatchImportSheet from './components/BatchImportSheet.vue'
+import FirstUseGuide from './components/FirstUseGuide.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
@@ -24,6 +25,7 @@ const batchFileInput = ref(null)
 const batchVisible = ref(false)
 const batchBusy = ref(false)
 const batchItems = ref([])
+const guideVisible = ref(false)
 const pickingDateKey = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
@@ -75,6 +77,12 @@ onMounted(async () => {
   track('app_open')
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
+  try {
+    guideVisible.value = Object.keys(photos).length === 0 &&
+      localStorage.getItem('photo_calendar_guide_seen') !== '1'
+  } catch {
+    guideVisible.value = Object.keys(photos).length === 0
+  }
 })
 
 onBeforeUnmount(() => {
@@ -132,6 +140,19 @@ function openPicker(dateKey) {
 
 function openBatchPicker() {
   batchFileInput.value?.click()
+}
+
+function dismissGuide() {
+  guideVisible.value = false
+  try {
+    localStorage.setItem('photo_calendar_guide_seen', '1')
+  } catch {
+    // 浏览器禁用本地存储时，不影响照片月历的使用
+  }
+}
+function startFromGuide() {
+  dismissGuide()
+  openBatchPicker()
 }
 
 function releaseBatchPreviews() {
@@ -200,7 +221,10 @@ async function confirmBatchImport(items) {
       }
     }))
     const succeeded = results.filter(item => !item.error)
-    if (succeeded.length) addPreparedPhotos(succeeded)
+    if (succeeded.length) {
+      addPreparedPhotos(succeeded)
+      dismissGuide()
+    }
     const failed = results.length - succeeded.length
     track('photo_batch_import', { count: succeeded.length, failed })
     batchVisible.value = false
@@ -267,6 +291,7 @@ async function onFileChange(e) {
   try {
     const shot = await readShotTime(f)
     await addPhoto(dateKey, f)
+    dismissGuide()
     track('photo_select', { hasExif: !!shot })
 
     if (!shot) {
@@ -417,6 +442,7 @@ function showPrivacy() {
         <div class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</div>
       </div>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
+      <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
     </header>
 
     <p class="hint" :style="{ color: themeSubColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
@@ -446,6 +472,12 @@ function showPrivacy() {
       <button class="bar-btn" @click="styleDrawerVisible = true">样式</button>
       <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
+
+    <FirstUseGuide
+      :visible="guideVisible"
+      @start="startFromGuide"
+      @close="dismissGuide"
+    />
 
     <BatchImportSheet
       :visible="batchVisible"
@@ -507,6 +539,7 @@ function showPrivacy() {
 .bg-overlay { position: fixed; inset: 0; z-index: -1; }
 .app { max-width: 560px; margin: 0 auto; padding: 12px 14px 120px; font-family: -apple-system, 'PingFang SC', sans-serif; color: #222; min-height: 100vh; }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.help-btn { border:0; background:rgba(255,255,255,.4); border-radius:10px; padding:0 10px; height:36px; font-size:12px; cursor:pointer; backdrop-filter:blur(6px); }
 .nav-btn { width: 40px; height: 40px; border: none; background: rgba(255, 255, 255, 0.4); border-radius: 10px; font-size: 22px; cursor: pointer; backdrop-filter: blur(6px); }
 .title-wrap { text-align: center; flex: 1; cursor: pointer; }
 .title { font-size: 18px; font-weight: 600; }
