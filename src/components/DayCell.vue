@@ -17,11 +17,14 @@ function onClick() {
 }
 
 const customStyle = computed(() => {
-  if (props.cell.isToday) return {} // today 的红色边框保留
   if (props.hasBgImage) {
-    // 有背景图时，空格子变成半透明白色，边框变为半透明白
-    return { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)' }
+    // 有背景图时，当天格子也使用半透明背景，同时保留红色日期边框
+    return {
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      borderColor: props.cell.isToday ? '#ff6b6b' : 'rgba(255,255,255,0.3)'
+    }
   }
+  if (props.cell.isToday) return {} // 无背景图时由 today class 保留红色边框
   return { borderColor: props.borderColor, backgroundColor: '#ffffff' }
 })
 
