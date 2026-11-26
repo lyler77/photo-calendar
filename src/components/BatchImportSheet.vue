@@ -45,6 +45,10 @@ function nextKey(key) {
 }
 function assignMissingDates() {
   const occupied = new Set(props.existingKeys)
+  // EXIF 日期优先，若撞上已有照片或其他导入照片，保留日期并提示用户手动处理
+  for (const item of localItems.value) {
+    if (item.shotDate) item.targetDate = item.shotDate
+  }
   for (const item of localItems.value) {
     if (item.shotDate && item.targetDate) occupied.add(item.targetDate)
   }
