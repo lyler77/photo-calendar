@@ -44,7 +44,9 @@ const { photos, init, addPhoto, removePhoto, scheduleSave } = usePhotos({
   getStyleSnapshot: getSnapshot,
   onSaveError: err => {
     if (err?.name === 'QuotaExceededError' || err?.code === 22) {
-      showSnackbar('存储空间不足，请导出后清理浏览器数据', '', null, 4000)
+      showSnackbar('存储空间不足，请导出作品后清理浏览器数据', '', null, 4000)
+    } else {
+      showSnackbar('草稿保存失败，请及时导出作品备份', '', null, 4000)
     }
   }
 })
@@ -274,7 +276,10 @@ function saveExport() {
 }
 
 async function copyCaption() {
-  const text = `我的 ${year.value} 年照片月历｜把相册里的日子拼回来了 📅✨\n#照片月历 #年度总结 #生活记录`
+  const period = exportType.value === 'month'
+    ? `${year.value}年${month.value}月`
+    : `${year.value}年`
+  const text = `我的 ${period}照片月历｜把相册里的日子拼回来了 📅✨\n#照片月历 #生活记录`
   try {
     await navigator.clipboard.writeText(text)
     track('caption_copy')
@@ -301,7 +306,7 @@ function submitSurvey(price) {
 }
 
 function showPrivacy() {
-  alert('照片与作品仅保存在你的手机/电脑浏览器本地（IndexedDB），不会上传到任何服务器。清理浏览器数据会丢失作品，建议制作后立即导出保存。')
+  alert('照片和作品只保存在你当前使用的手机或电脑浏览器中，不会上传到服务器。清理浏览器数据或更换设备可能导致作品丢失，建议及时导出保存。')
 }
 </script>
 
