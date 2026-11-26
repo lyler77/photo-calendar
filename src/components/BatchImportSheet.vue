@@ -50,7 +50,7 @@ function assignMissingDates() {
     if (item.shotDate && !item.manualDate) item.targetDate = item.shotDate
   }
   for (const item of localItems.value) {
-    if (item.targetDate) occupied.add(item.targetDate)
+    if ((item.shotDate || item.manualDate) && item.targetDate) occupied.add(item.targetDate)
   }
   let cursor = startDate.value || todayKey()
   for (const item of localItems.value) {
