@@ -7,7 +7,8 @@ defineProps({
   filterCss: { type: String, default: 'none' },
   borderColor: { type: String, default: '#eeeeee' },
   textColor: { type: String, default: '#333333' },
-  weekLabelColor: { type: String, default: '#888888' }
+  weekLabelColor: { type: String, default: '#888888' },
+  hasBgImage: { type: Boolean, default: false }
 })
 defineEmits(['cell-click'])
 
@@ -30,6 +31,7 @@ const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
       :filter-css="filterCss"
       :border-color="borderColor"
       :text-color="textColor"
+      :has-bg-image="hasBgImage"
       @cell-click="$emit('cell-click', $event)"
     />
   </div>

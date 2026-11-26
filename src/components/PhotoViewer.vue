@@ -39,7 +39,13 @@ defineEmits(['close'])
   border: none;
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  font-size: 22px;
   cursor: pointer;
+  /* 新增：强制居中修复变形 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
 }
 </style>

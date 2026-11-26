@@ -1,19 +1,21 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import CalendarGrid from './components/CalendarGrid.vue'
 import PhotoActionSheet from './components/PhotoActionSheet.vue'
 import PhotoViewer from './components/PhotoViewer.vue'
 import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
+import ExportSheet from './components/ExportSheet.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
 import { readShotTime } from './composables/useExif'
+import { renderMonth, renderYear } from './composables/useExport'
+import { track } from './composables/useTrack'
 
 const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
-const busy = ref(false)
 
 const fileInput = ref(null)
 const pickingDateKey = ref('')
@@ -21,16 +23,19 @@ const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
 
+const exportVisible = ref(false)
+const exportLoading = ref(false)
+const exportError = ref('')
+const exportPreviewUrl = ref('')
+const exportType = ref('month')
+
 const snackbar = ref(null)
 let snackbarTimer = null
 
 const {
-  style,
-  applyTemplate,
-  setBackgroundColor,
-  setFilter,
-  applyLoaded,
-  getSnapshot
+  style, applyTemplate, setBackgroundColor, setFilter,
+  setBackgroundImage, setOverlayOpacity, removeBackgroundImage,
+  applyLoaded, getSnapshot
 } = useStyle()
 
 const { photos, init, addPhoto, removePhoto, scheduleSave } = usePhotos({
@@ -40,14 +45,15 @@ const { photos, init, addPhoto, removePhoto, scheduleSave } = usePhotos({
   onSaveError: err => {
     if (err?.name === 'QuotaExceededError' || err?.code === 22) {
       showSnackbar('存储空间不足，请导出后清理浏览器数据', '', null, 4000)
-    } else {
-      console.warn('保存草稿失败', err)
     }
   }
 })
 
 const currentTemplate = computed(() => TEMPLATES[style.templateId] || TEMPLATES['minimal-white'])
 const currentFilterCss = computed(() => FILTERS[style.filter]?.css || 'none')
+const hasBgImage = computed(() => !!style.backgroundImageUrl)
+const themeTextColor = computed(() => hasBgImage.value ? '#ffffff' : currentTemplate.value.textColor)
+const themeSubColor = computed(() => hasBgImage.value ? 'rgba(255,255,255,0.7)' : currentTemplate.value.weekLabelColor)
 
 const cells = computed(() => buildMonthGrid(year.value, month.value))
 const filledCount = computed(() =>
@@ -58,19 +64,22 @@ const filledCount = computed(() =>
 )
 
 onMounted(async () => {
+  track('app_open')
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
 })
 
-watch([year, month], () => {
-  scheduleSave()
+onBeforeUnmount(() => {
+  if (exportPreviewUrl.value) URL.revokeObjectURL(exportPreviewUrl.value)
 })
+
+watch([year, month], () => { scheduleSave() })
 
 watch(
   () => ({ ...style }),
   () => {
     scheduleSave()
-    document.body.style.backgroundColor = style.backgroundColor
+    document.body.style.backgroundColor = hasBgImage.value ? '#000' : style.backgroundColor
   },
   { deep: true, immediate: true }
 )
@@ -79,11 +88,13 @@ function goPrev() {
   const r = prevMonth(year.value, month.value)
   year.value = r.year
   month.value = r.month
+  track('month_switch', { type: 'prev' })
 }
 function goNext() {
   const r = nextMonth(year.value, month.value)
   year.value = r.year
   month.value = r.month
+  track('month_switch', { type: 'next' })
 }
 function goToday() {
   const d = new Date()
@@ -91,12 +102,10 @@ function goToday() {
   month.value = d.getMonth() + 1
 }
 
-function showSnackbar(message, actionLabel = '', onAction = null, duration = 5000) {
+function showSnackbar(message, actionLabel = '', onAction = null, duration = 2500) {
   snackbar.value = { message, actionLabel, onAction }
   clearTimeout(snackbarTimer)
-  if (duration > 0) {
-    snackbarTimer = setTimeout(() => (snackbar.value = null), duration)
-  }
+  if (duration > 0) snackbarTimer = setTimeout(() => (snackbar.value = null), duration)
 }
 function closeSnackbar() {
   snackbar.value = null
@@ -130,7 +139,8 @@ function onDelete() {
   selectedDateKey.value = ''
   if (!key) return
   removePhoto(key)
-  showSnackbar('已删除', '', null, 1600)
+  track('photo_delete')
+  showSnackbar('已删除', '', null, 1500)
 }
 
 function dayOf(dateKey) {
@@ -147,7 +157,7 @@ function movePhoto(fromKey, toKey) {
   photos[toKey] = fromPhoto
   delete photos[fromKey]
   scheduleSave()
-  showSnackbar('已移到对应日期', '', null, 1600)
+  showSnackbar('已移到对应日期', '', null, 1500)
 }
 
 async function onFileChange(e) {
@@ -156,51 +166,167 @@ async function onFileChange(e) {
   const dateKey = pickingDateKey.value
   pickingDateKey.value = ''
   if (!f || !dateKey) return
-  busy.value = true
+
+  showSnackbar('处理中…', '', null, 10000)
+
   try {
     const shot = await readShotTime(f)
     await addPhoto(dateKey, f)
+    track('photo_select', { hasExif: !!shot })
 
     if (!shot) {
-      showSnackbar('未读取到拍摄时间，已放入当前格', '', null, 2400)
+      showSnackbar('未读取到拍摄时间，已放入当前格')
       return
     }
     const shotKey = formatDateKey(shot.getFullYear(), shot.getMonth() + 1, shot.getDate())
     if (shotKey === dateKey) {
-      showSnackbar('已填入', '', null, 1400)
+      showSnackbar('已填入', '', null, 1200)
       return
     }
     const [sy, sm, sd] = shotKey.split('-').map(Number)
     const sameMonth = sy === year.value && sm === month.value
     if (sameMonth) {
+      track('exif_mismatch_shown')
       showSnackbar(
         `这张拍摄于 ${sm}月${sd}日，已放入 ${month.value}月${dayOf(dateKey)}日`,
         `移到 ${sm}月${sd}日`,
-        () => movePhoto(dateKey, shotKey)
+        () => {
+          track('exif_move_click')
+          movePhoto(dateKey, shotKey)
+        },
+        4000
       )
     } else {
-      showSnackbar(`这张拍摄于 ${sy}年${sm}月${sd}日，已放入当前格`, '', null, 3600)
+      showSnackbar(`这张拍摄于 ${sy}年${sm}月${sd}日，已放入当前格`, '', null, 3000)
     }
   } catch (err) {
-    showSnackbar('这张图暂时无法识别，请在相册里截图或转成 JPEG 再选', '', null, 3600)
-  } finally {
-    busy.value = false
+    showSnackbar('这张图暂时无法识别，请在相册里截图或转成 JPEG 再选', '', null, 3000)
   }
+}
+
+async function onUploadBg(file) {
+  showSnackbar('背景图处理中…', '', null, 3000)
+  try {
+    await setBackgroundImage(file)
+    track('upload_bg')
+    showSnackbar('背景图已更新', '', null, 1500)
+  } catch (err) {
+    showSnackbar('背景图加载失败，请换一张试试', '', null, 3000)
+  }
+}
+
+// --- 导出逻辑 ---
+
+async function doGenerateExport() {
+  exportLoading.value = true
+  exportError.value = ''
+  if (exportPreviewUrl.value) {
+    URL.revokeObjectURL(exportPreviewUrl.value)
+    exportPreviewUrl.value = ''
+  }
+  try {
+    let res
+    if (exportType.value === 'month') {
+      res = await renderMonth({
+        year: year.value, month: month.value, cells: cells.value, photos,
+        style, template: currentTemplate.value, filterCss: currentFilterCss.value
+      })
+      track('export_single')
+    } else {
+      res = await renderYear({
+        year: year.value, photos,
+        style, template: currentTemplate.value, filterCss: currentFilterCss.value,
+        layout: exportType.value === 'year-h' ? 'h' : 'v'
+      })
+      track(exportType.value === 'year-h' ? 'export_year_h' : 'export_year_v')
+    }
+    exportPreviewUrl.value = URL.createObjectURL(res.blob)
+    track('export_success', { type: exportType.value })
+  } catch (err) {
+    exportError.value = err.message || '导出失败，请重试'
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+function openExport() {
+  exportVisible.value = true
+  doGenerateExport()
+}
+
+function onChangeExportType(type) {
+  if (exportType.value === type) return
+  exportType.value = type
+  doGenerateExport()
+}
+
+function saveExport() {
+  if (!exportPreviewUrl.value) return
+  const a = document.createElement('a')
+  a.href = exportPreviewUrl.value
+  const suffix = exportType.value === 'month' ? '单月' : (exportType.value === 'year-h' ? '全年横版' : '全年竖版')
+  a.download = `照片月历-${year.value}年-${suffix}.jpg`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  track('save_click', { type: exportType.value })
+  showSnackbar('已触发保存，iPhone 请用长按图片保存到相册', '', null, 3000)
+}
+
+async function copyCaption() {
+  const text = `我的 ${year.value} 年照片月历｜把相册里的日子拼回来了 📅✨\n#照片月历 #年度总结 #生活记录`
+  try {
+    await navigator.clipboard.writeText(text)
+    track('caption_copy')
+    showSnackbar('文案已复制，快去小红书发布吧！')
+  } catch (err) {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      track('caption_copy')
+      showSnackbar('文案已复制，快去小红书发布吧！')
+    } catch (e) {
+      showSnackbar('复制失败，请手动截图或输入')
+    }
+    document.body.removeChild(ta)
+  }
+}
+
+function submitSurvey(price) {
+  track('ai_willingness', { price })
+  showSnackbar('感谢反馈！', '', null, 2000)
+}
+
+function showPrivacy() {
+  alert('照片与作品仅保存在你的手机/电脑浏览器本地（IndexedDB），不会上传到任何服务器。清理浏览器数据会丢失作品，建议制作后立即导出保存。')
 }
 </script>
 
 <template>
+  <div 
+    class="bg-layer"
+    :style="hasBgImage ? { backgroundImage: `url(${style.backgroundImageUrl})` } : null"
+  />
+  <div 
+    class="bg-overlay"
+    v-if="hasBgImage"
+    :style="{ backgroundColor: `rgba(0, 0, 0, ${style.backgroundOverlayOpacity})` }"
+  />
+  
   <main class="app">
     <header class="header">
-      <button class="nav-btn" :style="{ color: currentTemplate.textColor }" @click="goPrev">‹</button>
+      <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
       <div class="title-wrap" @click="goToday">
-        <div class="title" :style="{ color: currentTemplate.textColor }">{{ year }} 年 {{ month }} 月</div>
-        <div class="subtitle" :style="{ color: currentTemplate.weekLabelColor }">已填 {{ filledCount }} 天</div>
+        <div class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</div>
+        <div class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</div>
       </div>
-      <button class="nav-btn" :style="{ color: currentTemplate.textColor }" @click="goNext">›</button>
+      <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
 
-    <p class="hint" :style="{ color: currentTemplate.weekLabelColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
+    <p class="hint" :style="{ color: themeSubColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
 
     <CalendarGrid
       :cells="cells"
@@ -208,16 +334,20 @@ async function onFileChange(e) {
       :filter-css="currentFilterCss"
       :border-color="currentTemplate.cellBorderColor"
       :text-color="currentTemplate.textColor"
-      :week-label-color="currentTemplate.weekLabelColor"
+      :week-label-color="themeSubColor"
+      :has-bg-image="hasBgImage"
       @cell-click="onCellClick"
     />
 
     <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
 
-    <p class="footer-note" :style="{ color: currentTemplate.weekLabelColor }">作品保存在本机浏览器，清除浏览器数据会丢失</p>
+    <p class="footer-note" :style="{ color: themeSubColor }">
+      作品仅保存在本机浏览器，<span style="text-decoration:underline;cursor:pointer" @click="showPrivacy">隐私说明</span>
+    </p>
 
     <div class="bottom-bar">
       <button class="bar-btn" @click="styleDrawerVisible = true">样式</button>
+      <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
 
     <StyleDrawer
@@ -226,7 +356,23 @@ async function onFileChange(e) {
       @apply-template="applyTemplate"
       @set-bg="setBackgroundColor"
       @set-filter="setFilter"
+      @upload-bg="onUploadBg"
+      @set-overlay="setOverlayOpacity"
+      @remove-bg="removeBackgroundImage"
       @close="styleDrawerVisible = false"
+    />
+
+    <ExportSheet
+      :visible="exportVisible"
+      :loading="exportLoading"
+      :preview-url="exportPreviewUrl"
+      :error="exportError"
+      :export-type="exportType"
+      @change-type="onChangeExportType"
+      @save="saveExport"
+      @copy="copyCaption"
+      @submit-survey="submitSurvey"
+      @close="exportVisible = false"
     />
 
     <PhotoActionSheet
@@ -246,88 +392,21 @@ async function onFileChange(e) {
       @action="onSnackbarAction"
       @close="closeSnackbar"
     />
-
-    <div v-if="busy" class="float-tip">处理中…</div>
   </main>
 </template>
 
 <style scoped>
-.app {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 12px 14px 100px;
-  font-family: -apple-system, 'PingFang SC', sans-serif;
-  color: #222;
-  min-height: 100vh;
-}
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.nav-btn {
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 10px;
-  font-size: 22px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-}
-.title-wrap {
-  text-align: center;
-  flex: 1;
-  cursor: pointer;
-}
-.title {
-  font-size: 18px;
-  font-weight: 600;
-}
-.subtitle {
-  font-size: 12px;
-  margin-top: 2px;
-}
-.hint {
-  font-size: 12px;
-  text-align: center;
-  margin: 4px 0 10px;
-}
-.footer-note {
-  font-size: 11px;
-  text-align: center;
-  margin-top: 16px;
-}
-.bottom-bar {
-  position: fixed;
-  left: 50%;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 50;
-}
-.bar-btn {
-  padding: 12px 28px;
-  border: none;
-  border-radius: 24px;
-  background: rgba(0, 0, 0, 0.82);
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-.float-tip {
-  position: fixed;
-  left: 50%;
-  bottom: 90px;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: 10px 18px;
-  border-radius: 20px;
-  font-size: 13px;
-  max-width: 80vw;
-  text-align: center;
-  z-index: 10;
-}
+.bg-layer { position: fixed; inset: 0; background-size: cover; background-position: center; z-index: -2; }
+.bg-overlay { position: fixed; inset: 0; z-index: -1; }
+.app { max-width: 560px; margin: 0 auto; padding: 12px 14px 120px; font-family: -apple-system, 'PingFang SC', sans-serif; color: #222; min-height: 100vh; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.nav-btn { width: 40px; height: 40px; border: none; background: rgba(255, 255, 255, 0.4); border-radius: 10px; font-size: 22px; cursor: pointer; backdrop-filter: blur(6px); }
+.title-wrap { text-align: center; flex: 1; cursor: pointer; }
+.title { font-size: 18px; font-weight: 600; }
+.subtitle { font-size: 12px; margin-top: 2px; }
+.hint { font-size: 12px; text-align: center; margin: 4px 0 10px; }
+.footer-note { font-size: 11px; text-align: center; margin-top: 16px; }
+.bottom-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; gap: 10px; }
+.bar-btn { padding: 12px 28px; border: none; border-radius: 24px; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.bar-btn.primary { background: #ff6b6b; }
 </style>

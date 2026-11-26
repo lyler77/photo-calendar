@@ -1,16 +1,28 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TEMPLATES, TEMPLATE_COLORS, FILTERS } from '../composables/useStyle'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   style: { type: Object, required: true }
 })
-const emit = defineEmits(['apply-template', 'set-bg', 'set-filter', 'close'])
+const emit = defineEmits(['apply-template', 'set-bg', 'set-filter', 'upload-bg', 'remove-bg', 'set-overlay', 'close'])
 
 const templates = Object.entries(TEMPLATES).map(([id, t]) => ({ id, ...t }))
 const filters = Object.entries(FILTERS).map(([id, f]) => ({ id, ...f }))
 const colors = computed(() => TEMPLATE_COLORS[props.style.templateId] || [])
+
+const bgInput = ref(null)
+
+function onBgChange(e) {
+  const f = e.target.files?.[0]
+  if (f) emit('upload-bg', f)
+  e.target.value = ''
+}
+
+function onOpacityChange(e) {
+  emit('set-overlay', Number(e.target.value))
+}
 </script>
 
 <template>
@@ -35,7 +47,7 @@ const colors = computed(() => TEMPLATE_COLORS[props.style.templateId] || [])
           </div>
         </section>
 
-        <section>
+        <section v-if="!style.backgroundImageUrl">
           <h3>背景色</h3>
           <div class="row">
             <button
@@ -45,6 +57,29 @@ const colors = computed(() => TEMPLATE_COLORS[props.style.templateId] || [])
               :class="{ active: style.backgroundColor === c }"
               :style="{ backgroundColor: c }"
               @click="$emit('set-bg', c)"
+            />
+          </div>
+        </section>
+
+        <section>
+          <h3>背景图</h3>
+          <div class="row">
+            <template v-if="style.backgroundImageUrl">
+              <button class="chip danger" @click="$emit('remove-bg')">移除背景图</button>
+            </template>
+            <template v-else>
+              <button class="chip" @click="bgInput?.click()">上传背景图</button>
+              <input ref="bgInput" type="file" accept="image/*" hidden @change="onBgChange" />
+            </template>
+          </div>
+          
+          <div v-if="style.backgroundImageUrl" class="slider-wrap">
+            <span class="slider-label">遮罩深浅</span>
+            <input 
+              type="range" 
+              min="0" max="0.8" step="0.05" 
+              :value="style.backgroundOverlayOpacity" 
+              @input="onOpacityChange"
             />
           </div>
         </section>
@@ -69,6 +104,7 @@ const colors = computed(() => TEMPLATE_COLORS[props.style.templateId] || [])
 </template>
 
 <style scoped>
+/* 前面省略... */
 .mask {
   position: fixed;
   inset: 0;
@@ -107,6 +143,7 @@ h3 {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .template-card {
   flex: 1;
@@ -159,6 +196,26 @@ h3 {
   background: #222;
   color: #fff;
   border-color: #222;
+}
+.chip.danger {
+  color: #e54;
+  border-color: #fbdcdc;
+  background: #fff6f6;
+}
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.slider-label {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+}
+.slider-wrap input {
+  flex: 1;
 }
 .done {
   width: 100%;

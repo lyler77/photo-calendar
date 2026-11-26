@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { compressImage } from './useImage'
 
 export const TEMPLATES = {
   'minimal-white': {
@@ -40,13 +41,21 @@ export function useStyle() {
   const style = reactive({
     templateId: 'minimal-white',
     backgroundColor: TEMPLATES['minimal-white'].backgroundColor,
-    filter: 'original'
+    filter: 'original',
+    backgroundImageBlob: null,
+    backgroundImageUrl: '',
+    backgroundOverlayOpacity: 0.5 // 新增：遮罩透明度，0 全透，1 全黑
   })
 
   function applyTemplate(id) {
     if (!TEMPLATES[id]) return
     style.templateId = id
     style.backgroundColor = TEMPLATES[id].backgroundColor
+    if (style.backgroundImageUrl) {
+      URL.revokeObjectURL(style.backgroundImageUrl)
+      style.backgroundImageUrl = ''
+      style.backgroundImageBlob = null
+    }
   }
 
   function setBackgroundColor(color) {
@@ -57,20 +66,61 @@ export function useStyle() {
     if (FILTERS[id]) style.filter = id
   }
 
+  async function setBackgroundImage(file) {
+    if (!file) return
+    const { blob } = await compressImage(file, 2000)
+    if (style.backgroundImageUrl) {
+      URL.revokeObjectURL(style.backgroundImageUrl)
+    }
+    style.backgroundImageBlob = blob
+    style.backgroundImageUrl = URL.createObjectURL(blob)
+    style.backgroundOverlayOpacity = 0.5 // 重置为默认 50%
+  }
+
+  function setOverlayOpacity(opacity) {
+    style.backgroundOverlayOpacity = opacity
+  }
+
+  function removeBackgroundImage() {
+    if (style.backgroundImageUrl) {
+      URL.revokeObjectURL(style.backgroundImageUrl)
+    }
+    style.backgroundImageBlob = null
+    style.backgroundImageUrl = ''
+  }
+
   function applyLoaded(loaded) {
     if (!loaded) return
     if (TEMPLATES[loaded.templateId]) style.templateId = loaded.templateId
     if (loaded.backgroundColor) style.backgroundColor = loaded.backgroundColor
     if (FILTERS[loaded.filter]) style.filter = loaded.filter
+    if (loaded.backgroundOverlayOpacity !== undefined) style.backgroundOverlayOpacity = loaded.backgroundOverlayOpacity
+    
+    if (loaded.backgroundImageBlob) {
+      style.backgroundImageBlob = loaded.backgroundImageBlob
+      style.backgroundImageUrl = URL.createObjectURL(loaded.backgroundImageBlob)
+    }
   }
 
   function getSnapshot() {
     return {
       templateId: style.templateId,
       backgroundColor: style.backgroundColor,
-      filter: style.filter
+      filter: style.filter,
+      backgroundImageBlob: style.backgroundImageBlob,
+      backgroundOverlayOpacity: style.backgroundOverlayOpacity
     }
   }
 
-  return { style, applyTemplate, setBackgroundColor, setFilter, applyLoaded, getSnapshot }
+  return {
+    style,
+    applyTemplate,
+    setBackgroundColor,
+    setFilter,
+    setBackgroundImage,
+    setOverlayOpacity,
+    removeBackgroundImage,
+    applyLoaded,
+    getSnapshot
+  }
 }
