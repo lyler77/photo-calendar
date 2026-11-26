@@ -15,7 +15,7 @@ const startDate = ref('')
 let draggingId = null
 
 watch(
-  () => [props.visible, props.items, props.initialDate],
+  () => [props.visible, props.initialDate],
   () => {
     if (!props.visible) return
     localItems.value = props.items.map(item => ({ ...item }))
