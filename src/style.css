@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-body {
+html, body {\n  scrollbar-width: none;\n}\nhtml::-webkit-scrollbar, body::-webkit-scrollbar {\n  display: none;\n  width: 0;\n  height: 0;\n}\nbody {
   margin: 0;
   background: #fafafa;
   -webkit-font-smoothing: antialiased;
