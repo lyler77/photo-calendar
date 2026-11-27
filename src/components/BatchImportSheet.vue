@@ -6,6 +6,7 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   existingKeys: { type: Array, default: () => [] },
   initialDate: { type: String, default: '' },
+  anchorDate: { type: String, default: '' },
   busy: { type: Boolean, default: false }
 })
 const emit = defineEmits(['close', 'confirm', 'update:items'])
@@ -13,12 +14,21 @@ const emit = defineEmits(['close', 'confirm', 'update:items'])
 const localItems = ref([])
 const startDate = ref('')
 let draggingId = null
+let anchorItemId = null
 
 watch(
   () => [props.visible, props.initialDate],
   () => {
     if (!props.visible) return
     localItems.value = props.items.map(item => ({ ...item }))
+    anchorItemId = props.anchorDate
+      ? (localItems.value.find(item => !item.error)?.id || null)
+      : null
+    if (anchorItemId) {
+      const anchorItem = localItems.value.find(item => item.id === anchorItemId)
+      anchorItem.targetDate = props.anchorDate
+      anchorItem.manualDate = true
+    }
     startDate.value = props.initialDate || todayKey()
     assignMissingDates()
   },
@@ -43,13 +53,34 @@ function nextKey(key) {
   date.setDate(date.getDate() + 1)
   return toKey(date)
 }
+function isReplacement(item) {
+  return !!(
+    item &&
+    item.id === anchorItemId &&
+    props.anchorDate &&
+    item.targetDate === props.anchorDate &&
+    props.existingKeys.includes(props.anchorDate)
+  )
+}
+
+function emitItems() {
+  emit('update:items', localItems.value.map(item => ({
+    ...item,
+    replaceExisting: isReplacement(item)
+  })))
+}
+
 function assignMissingDates() {
   const occupied = new Set(props.existingKeys)
 
-  // 手动指定的日期始终保留；自动日期则按当前分配模式重新计算
+  // 点击日期格后选择多张照片：第一张固定放在用户指定的日期。
+  // 即使该日期已有照片，也允许在确认时明确替换。
   for (const item of localItems.value) {
-    if (item.manualDate && item.targetDate) occupied.add(item.targetDate)
-    else if (item.shotDate && !item.error) {
+    if (item.id === anchorItemId && item.targetDate) {
+      occupied.add(item.targetDate)
+    } else if (item.manualDate && item.targetDate) {
+      occupied.add(item.targetDate)
+    } else if (item.shotDate && !item.error) {
       item.targetDate = item.shotDate
       occupied.add(item.targetDate)
     } else {
@@ -59,13 +90,13 @@ function assignMissingDates() {
 
   let cursor = startDate.value || todayKey()
   for (const item of localItems.value) {
-    if (item.error || item.manualDate || item.shotDate) continue
+    if (item.error || item.id === anchorItemId || item.manualDate || item.shotDate) continue
     while (occupied.has(cursor)) cursor = nextKey(cursor)
     item.targetDate = cursor
     occupied.add(cursor)
     cursor = nextKey(cursor)
   }
-  emit('update:items', localItems.value.map(item => ({ ...item })))
+  emitItems()
 }
 watch(startDate, () => assignMissingDates())
 
@@ -78,7 +109,10 @@ const duplicateKeys = computed(() => {
   return new Set([...counts].filter(([, count]) => count > 1).map(([key]) => key))
 })
 const invalidCount = computed(() => localItems.value.filter(item =>
-  item.error || !item.targetDate || occupiedSet.value.has(item.targetDate) || duplicateKeys.value.has(item.targetDate)
+  item.error ||
+  !item.targetDate ||
+  (occupiedSet.value.has(item.targetDate) && !isReplacement(item)) ||
+  duplicateKeys.value.has(item.targetDate)
 ).length)
 const readyCount = computed(() => localItems.value.length - invalidCount.value)
 
@@ -89,7 +123,7 @@ function updateItem(index, field, value) {
     assignMissingDates()
     return
   }
-  emit('update:items', localItems.value.map(item => ({ ...item })))
+  emitItems()
 }
 function removeItem(index) {
   if (props.busy) return
@@ -146,7 +180,10 @@ function formatShotDate(value) {
 }
 function confirm() {
   if (invalidCount.value || props.busy || !localItems.value.length) return
-  emit('confirm', localItems.value.map(item => ({ ...item })))
+  emit('confirm', localItems.value.map(item => ({
+    ...item,
+    replaceExisting: isReplacement(item)
+  })))
 }
 onBeforeUnmount(() => { draggingId = null })
 </script>
@@ -178,7 +215,11 @@ onBeforeUnmount(() => { draggingId = null })
           <p>有拍摄日期的照片会优先按原日期放置；其余照片按选择顺序填入空日期。</p>
         </section>
 
-        <div class="batch-tip">按住照片行并拖动可调整顺序，也可以直接修改日期。已有照片的日期不会被覆盖。</div>
+        <div class="batch-tip">
+          按住照片行并拖动可调整顺序，也可以直接修改日期。
+          <span v-if="anchorDate">第一张照片将放在你点击的日期；如该日期已有照片，会在确认时替换。</span>
+          <span v-else>其他已有照片的日期不会被覆盖。</span>
+        </div>
 
         <div class="batch-list" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
           <article
@@ -200,7 +241,8 @@ onBeforeUnmount(() => { draggingId = null })
               <small v-if="item.error" class="warning">{{ item.error }}</small>
               <small v-else-if="item.shotDate">拍摄日期：{{ formatShotDate(item.shotDate) }}</small>
               <small v-else>未读取到拍摄日期</small>
-              <small v-if="!item.error && item.targetDate && occupiedSet.has(item.targetDate)" class="warning">这一天已有照片，请换一个日期</small>
+              <small v-if="!item.error && isReplacement(item)" class="replace-notice">确认后将替换这一天已有照片</small>
+              <small v-else-if="!item.error && item.targetDate && occupiedSet.has(item.targetDate)" class="warning">这一天已有照片，请换一个日期</small>
               <small v-else-if="!item.error && item.targetDate && duplicateKeys.has(item.targetDate)" class="warning">导入列表中有重复日期，请调整</small>
             </div>
             <input
@@ -237,6 +279,7 @@ onBeforeUnmount(() => { draggingId = null })
 .batch-summary { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:12px; color:#777; margin:16px 0 12px; }
 .batch-summary strong { color:#222; font-size:14px; }
 .warning { color:#c65d3a !important; }
+.replace-notice { color:#b35b35 !important; font-weight:600; }
 .date-options { padding:12px; border:1px solid #eee; border-radius:10px; }
 .option-heading { font-size:12px; font-weight:600; margin-bottom:9px; }
 .date-control { display:flex; align-items:center; justify-content:space-between; gap:10px; }
