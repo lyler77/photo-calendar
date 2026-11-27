@@ -176,7 +176,6 @@ async function onBatchFileChange(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
   if (!files.length) return
-  pickingDateKey.value = ''
 
   releaseBatchPreviews()
   showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
