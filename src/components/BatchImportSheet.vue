@@ -239,7 +239,7 @@ function confirm() {
 .batch-sheet { width:100%; max-width:620px; max-height:92vh; overflow:auto; background:#fff; color:#222; border-radius:16px 16px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom)); box-sizing:border-box; }
 .batch-header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .batch-header h2 { font-size:18px; margin:0; font-weight:600; }
-.close { display:flex; align-items:center; justify-content:center; flex:0 0 34px; width:34px; height:34px; padding:0; border:0; background:#f3f3f3; border-radius:50%; font-size:22px; line-height:1; color:#555; }
+.close { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; box-sizing:border-box; padding:0; margin:0; border:0; -webkit-appearance:none; appearance:none; background:#f3f3f3; border-radius:50%; font-family:Arial,sans-serif; font-size:21px; font-weight:400; line-height:1; color:#555; text-align:center; }
 .batch-summary { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:12px; color:#777; margin:16px 0 12px; }
 .batch-summary strong { color:#222; font-size:14px; }
 .warning { color:#c65d3a !important; }
@@ -261,7 +261,7 @@ function confirm() {
 .item-info small { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:#888; line-height:1.35; }
 .target-date { width:100%; min-width:0; box-sizing:border-box; border:1px solid #ddd; border-radius:7px; padding:7px 5px; font:inherit; color:#333; background:#fff; font-size:12px; }
 .target-date:disabled { opacity:.35; }
-.remove { display:flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; border:0; border-radius:8px; background:#fff0eb; color:#b75a3b; font-size:18px; line-height:1; }
+.remove { display:grid; place-items:center; width:30px; height:30px; box-sizing:border-box; padding:0; margin:0; border:0; -webkit-appearance:none; appearance:none; border-radius:8px; background:#fff0eb; color:#b75a3b; font-family:Arial,sans-serif; font-size:18px; line-height:1; text-align:center; }
 .empty-list { text-align:center; color:#999; font-size:12px; padding:20px 0; }
 .batch-actions { display:flex; gap:10px; margin-top:14px; }
 .batch-actions button { border:0; border-radius:10px; padding:13px; font-size:14px; }
