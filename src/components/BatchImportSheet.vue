@@ -212,7 +212,8 @@ onBeforeUnmount(() => { draggingId = null })
             <label for="batch-start-date">无拍摄日期的照片，从这天开始</label>
             <input id="batch-start-date" v-model="startDate" type="date" :disabled="busy" />
           </div>
-          <p>有拍摄日期的照片会优先按原日期放置；其余照片按选择顺序填入空日期。</p>
+          <p v-if="anchorDate">第一张照片放在你点击的日期；其余照片优先按拍摄日期放置，无拍摄日期的照片从上方日期开始填入空日期。</p>
+          <p v-else>有拍摄日期的照片会优先按原日期放置；其余照片按选择顺序填入空日期。</p>
         </section>
 
         <div class="batch-tip">
