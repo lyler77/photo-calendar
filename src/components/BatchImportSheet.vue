@@ -290,7 +290,7 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
 .date-control label { font-size:11px; color:#777; }
 .date-control input { width:145px; border:1px solid #ddd; border-radius:7px; padding:6px 8px; font:inherit; color:#333; background:#fff; font-size:12px; }
 .batch-list { display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; padding:2px; touch-action:pan-y; }
-.batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:7px; min-width:0; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; }
+.batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 128px 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:7px; min-width:0; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; }
 .batch-item:active { cursor:grabbing; }
 .batch-item.invalid { border-color:#e6b49d; background:#fffaf7; }
 .batch-item.unsupported { background:#fafafa; border-style:dashed; }
@@ -310,5 +310,7 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
 @media (max-width:420px) {
   .batch-item { grid-template-columns:42px minmax(0,1fr) 28px; gap:7px; }
   .batch-item img,.image-placeholder { width:42px; height:42px; }
+  .target-date { grid-column:2 / 3; }
+  .remove { grid-column:3; grid-row:1 / span 2; }
 }
 </style>
