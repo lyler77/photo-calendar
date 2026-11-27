@@ -161,13 +161,6 @@ function moveItem(from, to) {
   localItems.value = next
   assignMissingDates()
 }
-function onDrop(event, targetId) {
-  event.preventDefault()
-  const from = localItems.value.findIndex(item => item.id === draggingId)
-  const to = localItems.value.findIndex(item => item.id === targetId)
-  if (from >= 0 && to >= 0) moveItem(from, to)
-  draggingId = null
-}
 function onPointerDown(event, id) {
   if (localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
   draggingId = id
@@ -235,7 +228,7 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
             :key="item.id"
             class="batch-item"
             :data-batch-id="item.id"
-            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)) || duplicateKeys.has(item.targetDate), unsupported: item.error }"
+            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)) || duplicateKeys.has(item.targetDate), unsupported: item.error, dragging: draggingId === item.id }"
             @pointerdown="onPointerDown($event, item.id)"
           >
             <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
@@ -292,6 +285,7 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
 .batch-list { display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; padding:2px; touch-action:pan-y; }
 .batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 128px 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:7px; min-width:0; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; }
 .batch-item:active { cursor:grabbing; }
+.batch-item.dragging { border-color:#999; box-shadow:0 4px 14px rgba(0,0,0,.12); opacity:.72; }
 .batch-item.invalid { border-color:#e6b49d; background:#fffaf7; }
 .batch-item.unsupported { background:#fafafa; border-style:dashed; }
 .batch-item img,.image-placeholder { width:48px; height:48px; object-fit:cover; border-radius:6px; background:#eee; }
