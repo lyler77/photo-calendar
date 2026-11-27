@@ -127,7 +127,7 @@ function openMonthPicker() {
   monthPickerVisible.value = !monthPickerVisible.value
 }
 function applyMonthPicker() {
-  if (!/^\\d{4}-\\d{2}$/.test(monthPickerValue.value)) return
+  if (!/^\d{4}-\d{2}$/.test(monthPickerValue.value)) return
   const [y, m] = monthPickerValue.value.split('-').map(Number)
   if (m < 1 || m > 12) return
   year.value = y
