@@ -184,7 +184,7 @@ function confirm() {
 
         <div class="batch-summary">
           <strong>{{ localItems.length }} 张</strong>
-          <span v-if="invalidCount" class="warning">{{ invalidCount }} 项需处理</span>
+          <span v-if="invalidCount" class="warning">{{ invalidCount }} 张需要调整，问题已标在照片下方</span>
           <button v-if="errorCount" class="remove-errors" :disabled="busy" @click="removeErrorItems">
             移除无法读取的 {{ errorCount }} 张
           </button>
@@ -206,14 +206,14 @@ function confirm() {
             v-for="(item, index) in localItems"
             :key="item.id"
             class="batch-item"
-            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)), unsupported: item.error }"
+            :class="{ invalid: item.error || !item.targetDate || duplicateKeys.has(item.targetDate) || (occupiedSet.has(item.targetDate) && !isReplacement(item)), unsupported: item.error }"
           >
             <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
               <small v-else>
-                {{ item.shotDate ? '拍摄于 ' + formatShotDate(item.shotDate) : '未读到拍摄日期' }}<template v-if="isReplacement(item)"> · <span class="replace-notice">将替换原照片</span></template><template v-else-if="item.targetDate && occupiedSet.has(item.targetDate)"> · <span class="warning">日期已有照片</span></template><template v-else-if="item.targetDate && duplicateKeys.has(item.targetDate)"> · <span class="warning">日期重复</span></template>
+                {{ item.shotDate ? '拍摄于 ' + formatShotDate(item.shotDate) : '未读到拍摄日期' }}<template v-if="item.targetDate && duplicateKeys.has(item.targetDate)"> · <span class="warning">与其他照片日期重复，请修改</span></template><template v-else-if="item.targetDate && occupiedSet.has(item.targetDate) && !isReplacement(item)"> · <span class="warning">该日期已有照片，请选择替换或其他日期</span></template><template v-else-if="isReplacement(item)"> · <span class="replace-notice">将替换原照片</span></template>
               </small>
             </div>
             <input
