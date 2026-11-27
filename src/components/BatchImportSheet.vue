@@ -19,7 +19,13 @@ watch(
   () => [props.visible, props.initialDate, props.anchorDate],
   () => {
     if (!props.visible) return
-    localItems.value = props.items.map(item => ({ ...item }))
+    localItems.value = props.items.map(item => ({
+      ...item,
+      replaceTargetDate: item.targetDate || '',
+      skipTargetDate: '',
+      replaceManualDate: !!item.manualDate,
+      skipManualDate: false
+    }))
     placementMode.value = 'replace'
     startDate.value = props.initialDate || todayKey()
     assignMissingDates()
@@ -52,6 +58,29 @@ function isReplacement(item) {
     placementMode.value === 'replace' &&
     props.existingKeys.includes(item.targetDate)
   )
+}
+
+function saveActiveMode() {
+  if (!props.anchorDate) return
+  const dateField = placementMode.value === 'replace' ? 'replaceTargetDate' : 'skipTargetDate'
+  const manualField = placementMode.value === 'replace' ? 'replaceManualDate' : 'skipManualDate'
+  for (const item of localItems.value) {
+    item[dateField] = item.targetDate || ''
+    item[manualField] = !!item.manualDate
+  }
+}
+
+function switchPlacementMode(mode) {
+  if (mode === placementMode.value || props.busy) return
+  saveActiveMode()
+  placementMode.value = mode
+  const dateField = mode === 'replace' ? 'replaceTargetDate' : 'skipTargetDate'
+  const manualField = mode === 'replace' ? 'replaceManualDate' : 'skipManualDate'
+  for (const item of localItems.value) {
+    item.targetDate = item[dateField] || ''
+    item.manualDate = !!item[manualField]
+  }
+  assignMissingDates()
 }
 
 function emitItems() {
@@ -88,6 +117,7 @@ function assignMissingDates() {
       reserved.add(cursor)
       cursor = nextKey(cursor)
     }
+    saveActiveMode()
     emitItems()
     return
   }
@@ -114,7 +144,7 @@ function assignMissingDates() {
   emitItems()
 }
 watch(startDate, () => { if (!props.anchorDate) assignMissingDates() })
-watch(placementMode, () => { if (props.anchorDate) assignMissingDates() })
+
 
 const occupiedSet = computed(() => new Set(props.existingKeys))
 const propsAnchorMode = computed(() => !!props.anchorDate)
@@ -139,6 +169,7 @@ function updateItem(index, field, value) {
   if (field === 'targetDate') {
     // 修改一张照片的日期，不联动重排其他照片。
     localItems.value[index].manualDate = !!value
+    saveActiveMode()
     emitItems()
     return
   }
@@ -157,7 +188,7 @@ function removeErrorItems() {
 function formatShotDate(value) {
   if (!value) return ''
   const [year, month, day] = value.split('-').map(Number)
-  return year + '年' + month + '月' + day + '日'
+  return month + '/' + day
 }
 function confirm() {
   if (invalidCount.value || props.busy || !localItems.value.length) return
@@ -182,7 +213,7 @@ function confirm() {
 
         <div class="batch-summary">
           <strong>{{ localItems.length }} 张</strong>
-          <span v-if="invalidCount" class="warning">{{ invalidCount }} 张需要调整，问题已标在照片下方</span>
+          <span v-if="invalidCount" class="warning">{{ invalidCount }} 张需调整</span>
           <button v-if="errorCount" class="remove-errors" :disabled="busy" @click="removeErrorItems">
             移除无法读取的 {{ errorCount }} 张
           </button>
@@ -190,8 +221,8 @@ function confirm() {
 
         <section class="date-options">
           <div v-if="anchorDate" class="placement-switch">
-            <button :class="{ active: placementMode === 'replace' }" @click="placementMode = 'replace'">替换已有照片</button>
-            <button :class="{ active: placementMode === 'skip' }" @click="placementMode = 'skip'">只放入空格</button>
+            <button :class="{ active: placementMode === 'replace' }" :disabled="busy" @click="switchPlacementMode('replace')">替换已有照片</button>
+            <button :class="{ active: placementMode === 'skip' }" :disabled="busy" @click="switchPlacementMode('skip')">只放入空格</button>
           </div>
           <div v-if="!anchorDate" class="date-control">
             <label for="batch-start-date">无拍摄日期，从</label>
@@ -211,7 +242,7 @@ function confirm() {
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
               <small v-else>
-                {{ item.shotDate ? '拍摄于 ' + formatShotDate(item.shotDate) : '未读到拍摄日期' }}<template v-if="item.targetDate && duplicateKeys.has(item.targetDate)"> · <span class="warning">与其他照片日期重复，请修改</span></template><template v-else-if="item.targetDate && occupiedSet.has(item.targetDate) && !isReplacement(item)"> · <span class="warning">该日期已有照片，请选择替换或其他日期</span></template><template v-else-if="isReplacement(item)"> · <span class="replace-notice">将替换原照片</span></template>
+                {{ item.shotDate ? '拍摄于 ' + formatShotDate(item.shotDate) : '无拍摄日期' }}<template v-if="item.targetDate && duplicateKeys.has(item.targetDate)"> · <span class="warning">日期重复</span></template><template v-else-if="item.targetDate && occupiedSet.has(item.targetDate) && !isReplacement(item)"> · <span class="warning">已有照片</span></template><template v-else-if="isReplacement(item)"> · <span class="replace-notice">将替换</span></template>
               </small>
             </div>
             <input
