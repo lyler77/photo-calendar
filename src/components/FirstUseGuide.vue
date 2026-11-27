@@ -37,11 +37,11 @@ defineEmits(['start', 'close'])
         <ol class="steps">
           <li>
             <span class="step-number">01</span>
-            <div><strong>添加照片</strong><small>可以一次选择多张，也可以逐格添加</small></div>
+            <div><strong>添加照片</strong><small>一次选择一张或多张照片</small></div>
           </li>
           <li>
             <span class="step-number">02</span>
-            <div><strong>安排日期</strong><small>按拍摄日期或选择顺序填入，都可以再调整</small></div>
+            <div><strong>安排日期</strong><small>优先按拍摄日期安排，也可以手动调整</small></div>
           </li>
           <li>
             <span class="step-number">03</span>
