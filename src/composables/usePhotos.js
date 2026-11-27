@@ -7,6 +7,7 @@ export function usePhotos({ yearRef, monthRef, getStyleSnapshot, onSaveError } =
   const ready = ref(false)
   let saveTimer = null
   let loading = true
+  let saveQueue = Promise.resolve()
 
   async function init() {
     let loadedStyle = null
@@ -34,28 +35,53 @@ export function usePhotos({ yearRef, monthRef, getStyleSnapshot, onSaveError } =
     return loadedStyle
   }
 
-  async function doSave() {
-    const entries = {}
-    for (const [key, p] of Object.entries(photos)) {
-      entries[key] = { blob: p.blob, width: p.width, height: p.height }
-    }
-    try {
+  function doSave() {
+    // 串行写入 IndexedDB；每次真正执行时再读取最新状态，
+    // 避免较早发起的异步保存晚到并覆盖更新的照片/背景状态。
+    saveQueue = saveQueue.catch(() => {}).then(async () => {
+      const entries = {}
+      for (const [key, p] of Object.entries(photos)) {
+        entries[key] = { blob: p.blob, width: p.width, height: p.height }
+      }
       await saveProject({
         year: yearRef?.value,
         month: monthRef?.value,
         entries,
         style: getStyleSnapshot ? getStyleSnapshot() : null
       })
-    } catch (err) {
+    })
+
+    return saveQueue.catch(err => {
       if (onSaveError) onSaveError(err)
       else console.warn('保存草稿失败', err)
-    }
+    })
   }
 
   function scheduleSave() {
     if (loading || !ready.value) return
     clearTimeout(saveTimer)
-    saveTimer = setTimeout(doSave, 300)
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      doSave()
+    }, 300)
+  }
+
+  function flushSave() {
+    if (loading || !ready.value) return Promise.resolve()
+    clearTimeout(saveTimer)
+    saveTimer = null
+    return doSave()
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') flushSave()
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushSave)
   }
 
   async function addPhoto(dateKey, file) {
@@ -96,7 +122,14 @@ export function usePhotos({ yearRef, monthRef, getStyleSnapshot, onSaveError } =
   }
 
   onBeforeUnmount(() => {
+    flushSave()
     clearTimeout(saveTimer)
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', flushSave)
+    }
     Object.values(photos).forEach(p => p.url && URL.revokeObjectURL(p.url))
   })
 
