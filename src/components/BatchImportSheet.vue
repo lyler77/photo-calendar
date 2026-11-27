@@ -203,7 +203,6 @@ function confirm() {
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
-              <small v-else-if="propsAnchorMode">按选择顺序安排</small>
               <small v-else-if="item.shotDate">照片拍摄日期：{{ formatShotDate(item.shotDate) }}</small>
               <small v-else>未读到拍摄日期</small>
               <small v-if="!item.error && isReplacement(item)" class="replace-notice">将替换原照片</small>
