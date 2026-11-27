@@ -87,7 +87,10 @@ onBeforeUnmount(() => {
   if (exportPreviewUrl.value) URL.revokeObjectURL(exportPreviewUrl.value)
 })
 
-watch([year, month], () => {\n  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')\n  scheduleSave()\n})
+watch([year, month], () => {
+  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
+  scheduleSave()
+})
 
 watch(
   () => ({ ...style }),
@@ -117,7 +120,7 @@ function goToday() {
   monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
 }
 function onMonthChange() {
-  if (!/^\\d{4}-\\d{2}$/.test(monthPickerValue.value)) return
+  if (!/^\d{4}-\d{2}$/.test(monthPickerValue.value)) return
   const [y, m] = monthPickerValue.value.split('-').map(Number)
   if (m < 1 || m > 12) return
   year.value = y
@@ -393,7 +396,8 @@ async function copyCaption() {
   const period = exportType.value === 'month'
     ? `${year.value}年${month.value}月`
     : `${year.value}年`
-  const text = `我的 ${period}照片月历｜把相册里的日子拼回来了 📅✨\n#照片月历 #生活记录`
+  const text = `我的 ${period}照片月历｜把相册里的日子拼回来了 📅✨
+#照片月历 #生活记录`
   try {
     await navigator.clipboard.writeText(text)
     track('caption_copy')
