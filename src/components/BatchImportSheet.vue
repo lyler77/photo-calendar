@@ -135,6 +135,7 @@ const invalidCount = computed(() => localItems.value.filter(item =>
   duplicateKeys.value.has(item.targetDate)
 ).length)
 const readyCount = computed(() => localItems.value.length - invalidCount.value)
+const errorCount = computed(() => localItems.value.filter(item => item.error).length)
 
 function updateItem(index, field, value) {
   localItems.value[index][field] = value
@@ -148,6 +149,11 @@ function updateItem(index, field, value) {
 function removeItem(index) {
   if (props.busy) return
   localItems.value.splice(index, 1)
+  assignMissingDates()
+}
+function removeErrorItems() {
+  if (props.busy || !errorCount.value) return
+  localItems.value = localItems.value.filter(item => !item.error)
   assignMissingDates()
 }
 function formatShotDate(value) {
@@ -179,6 +185,9 @@ function confirm() {
         <div class="batch-summary">
           <strong>{{ localItems.length }} 张</strong>
           <span v-if="invalidCount" class="warning">{{ invalidCount }} 项需处理</span>
+          <button v-if="errorCount" class="remove-errors" :disabled="busy" @click="removeErrorItems">
+            移除无法读取的 {{ errorCount }} 张
+          </button>
         </div>
 
         <section class="date-options">
@@ -239,6 +248,8 @@ function confirm() {
 .close { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; box-sizing:border-box; padding:0; margin:0; border:0; -webkit-appearance:none; appearance:none; background:#f3f3f3; border-radius:50%; font-family:Arial,sans-serif; font-size:21px; font-weight:400; line-height:1; color:#555; text-align:center; }
 .batch-summary { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:12px; color:#777; margin:16px 0 12px; }
 .batch-summary strong { color:#222; font-size:14px; }
+.remove-errors { margin-left:auto; border:0; padding:5px 0; background:transparent; color:#b75a3b; font:inherit; font-size:11px; white-space:nowrap; }
+.remove-errors:disabled { opacity:.45; }
 .warning { color:#c65d3a !important; }
 .replace-notice { color:#b35b35 !important; font-weight:600; }
 .date-options { margin:4px 0 10px; }
