@@ -87,7 +87,11 @@ const readyCount = computed(() => localItems.value.length - invalidCount.value)
 
 function updateItem(index, field, value) {
   localItems.value[index][field] = value
-  if (field === 'targetDate') localItems.value[index].manualDate = true
+  if (field === 'targetDate') {
+    localItems.value[index].manualDate = !!value
+    assignMissingDates()
+    return
+  }
   emit('update:items', localItems.value.map(item => ({ ...item })))
 }
 function removeItem(index) {
