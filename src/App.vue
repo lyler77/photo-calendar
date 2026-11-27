@@ -25,7 +25,6 @@ const batchVisible = ref(false)
 const batchBusy = ref(false)
 const batchItems = ref([])
 const guideVisible = ref(false)
-const pickingDateKey = ref('')
 const batchAnchorDate = ref('')
 const batchInitialDate = ref('')
 const selectedDateKey = ref('')
@@ -141,7 +140,6 @@ function onSnackbarAction() {
 }
 
 function openPicker(dateKey) {
-  pickingDateKey.value = dateKey
   batchAnchorDate.value = dateKey
   batchInitialDate.value = dateKey
   batchFileInput.value?.click()
@@ -149,7 +147,6 @@ function openPicker(dateKey) {
 
 function openBatchPicker() {
   const firstDay = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
-  pickingDateKey.value = ''
   batchAnchorDate.value = firstDay
   batchInitialDate.value = firstDay
   batchFileInput.value?.click()
