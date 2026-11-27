@@ -12,7 +12,6 @@ const emit = defineEmits(['close', 'confirm', 'update:items'])
 
 const localItems = ref([])
 const startDate = ref('')
-const dateMode = ref('exif')
 let draggingId = null
 
 watch(
@@ -21,7 +20,6 @@ watch(
     if (!props.visible) return
     localItems.value = props.items.map(item => ({ ...item }))
     startDate.value = props.initialDate || todayKey()
-    dateMode.value = 'exif'
     assignMissingDates()
   },
   { deep: true, immediate: true }
@@ -51,7 +49,7 @@ function assignMissingDates() {
   // 手动指定的日期始终保留；自动日期则按当前分配模式重新计算
   for (const item of localItems.value) {
     if (item.manualDate && item.targetDate) occupied.add(item.targetDate)
-    else if (dateMode.value === 'exif' && item.shotDate && !item.error) {
+    else if (item.shotDate && !item.error) {
       item.targetDate = item.shotDate
       occupied.add(item.targetDate)
     } else {
@@ -61,7 +59,7 @@ function assignMissingDates() {
 
   let cursor = startDate.value || todayKey()
   for (const item of localItems.value) {
-    if (item.error || item.manualDate || (dateMode.value === 'exif' && item.shotDate)) continue
+    if (item.error || item.manualDate || item.shotDate) continue
     while (occupied.has(cursor)) cursor = nextKey(cursor)
     item.targetDate = cursor
     occupied.add(cursor)
@@ -70,7 +68,6 @@ function assignMissingDates() {
   emit('update:items', localItems.value.map(item => ({ ...item })))
 }
 watch(startDate, () => assignMissingDates())
-watch(dateMode, () => assignMissingDates())
 
 const occupiedSet = computed(() => new Set(props.existingKeys))
 const duplicateKeys = computed(() => {
@@ -126,7 +123,7 @@ function onDrop(event, targetId) {
   draggingId = null
 }
 function onPointerDown(event, id) {
-  if (event.pointerType === 'mouse' || localItems.value.find(item => item.id === id)?.error) return
+  if (event.pointerType === 'mouse' || localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
   draggingId = id
   event.currentTarget.setPointerCapture?.(event.pointerId)
 }
@@ -174,17 +171,14 @@ onBeforeUnmount(() => { draggingId = null })
 
         <section class="date-options">
           <div class="option-heading">日期安排</div>
-          <div class="mode-switch">
-            <button :class="{ active: dateMode === 'exif' }" :disabled="busy" @click="dateMode = 'exif'">按拍摄日期</button>
-            <button :class="{ active: dateMode === 'sequence' }" :disabled="busy" @click="dateMode = 'sequence'">按选择顺序</button>
+          <div class="date-control">
+            <label for="batch-start-date">无拍摄日期的照片，从这天开始</label>
+            <input id="batch-start-date" v-model="startDate" type="date" :disabled="busy" />
           </div>
-          <p v-if="dateMode === 'exif'">优先使用照片拍摄日期；没有拍摄日期的照片从起始日期依次填入空格。</p>
-          <p v-else>忽略照片中的拍摄日期，按你选择照片的顺序连续填入空格。</p>
-          <label for="batch-start-date">连续填入的起始日期</label>
-          <input id="batch-start-date" v-model="startDate" type="date" :disabled="busy" />
+          <p>有拍摄日期的照片会优先按原日期放置；其余照片按选择顺序填入空日期。</p>
         </section>
 
-        <div class="batch-tip">拖动照片可调整顺序，也可以直接修改日期。已有照片的日期不会被覆盖。</div>
+        <div class="batch-tip">按住照片行并拖动可调整顺序，也可以直接修改日期。已有照片的日期不会被覆盖。</div>
 
         <div class="batch-list" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
           <article
@@ -192,18 +186,13 @@ onBeforeUnmount(() => { draggingId = null })
             :key="item.id"
             class="batch-item"
             :data-batch-id="item.id"
+            :draggable="!item.error && !busy"
+            @dragstart="onDragStart($event, item.id)"
+            @pointerdown="onPointerDown($event, item.id)"
             :class="{ invalid: item.error || !item.targetDate || occupiedSet.has(item.targetDate) || duplicateKeys.has(item.targetDate), unsupported: item.error }"
             @dragover.prevent
             @drop="onDrop($event, item.id)"
           >
-            <div
-              class="drag-handle"
-              :class="{ disabled: item.error }"
-              :title="item.error ? '该文件无法操作' : '拖动调整顺序'"
-              :draggable="!item.error && !busy"
-              @dragstart="onDragStart($event, item.id)"
-              @pointerdown="onPointerDown($event, item.id)"
-            >⠿</div>
             <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
@@ -222,11 +211,7 @@ onBeforeUnmount(() => { draggingId = null })
               :aria-label="'为' + item.name + '设置日期'"
               @change="updateItem(index, 'targetDate', $event.target.value)"
             />
-            <div class="reorder">
-              <button :disabled="!!item.error || busy || index === 0 || !!localItems[index - 1]?.error" aria-label="上移" @click="moveItem(index, index - 1)">↑</button>
-              <button :disabled="!!item.error || busy || index === localItems.length - 1 || !!localItems[index + 1]?.error" aria-label="下移" @click="moveItem(index, index + 1)">↓</button>
-              <button class="remove" :disabled="busy" aria-label="从本次导入中删除" title="从本次导入中删除" @click="removeItem(index)">×</button>
-            </div>
+            <button class="remove" :disabled="busy" aria-label="从本次导入中删除" title="从本次导入中删除" @click="removeItem(index)">×</button>
           </article>
           <p v-if="!localItems.length" class="empty-list">没有待导入的照片了</p>
         </div>
@@ -254,19 +239,17 @@ onBeforeUnmount(() => { draggingId = null })
 .warning { color:#c65d3a !important; }
 .date-options { padding:12px; border:1px solid #eee; border-radius:10px; }
 .option-heading { font-size:12px; font-weight:600; margin-bottom:9px; }
-.mode-switch { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:3px; background:#f5f5f5; border-radius:9px; }
-.mode-switch button { border:0; border-radius:7px; padding:9px 6px; background:transparent; color:#777; font:inherit; font-size:12px; }
-.mode-switch button.active { background:#fff; color:#222; box-shadow:0 1px 4px rgba(0,0,0,.1); }
-.date-options p { font-size:11px; line-height:1.5; color:#888; margin:8px 0 10px; }
-.date-options label { display:block; font-size:11px; color:#777; margin-bottom:5px; }
-.date-options input { width:100%; border:1px solid #ddd; border-radius:7px; padding:8px; font:inherit; color:#333; background:#fff; }
+.date-control { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.date-options label { font-size:11px; color:#777; }
+.date-options input { width:145px; border:1px solid #ddd; border-radius:7px; padding:6px 8px; font:inherit; color:#333; background:#fff; font-size:12px; }
+.date-options p { font-size:10px; line-height:1.45; color:#888; margin:7px 0 0; }
 .batch-tip { font-size:11px; line-height:1.6; color:#888; margin:10px 0; }
 .batch-list { display:flex; flex-direction:column; gap:8px; max-height:38vh; overflow:auto; padding:2px; }
-.batch-item { display:grid; grid-template-columns:24px 52px minmax(0,1fr) auto 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:8px; min-width:0; }
+.batch-item { display:grid; grid-template-columns:52px minmax(0,1fr) auto 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:8px; min-width:0; cursor:grab; user-select:none; }
+.batch-item:active { cursor:grabbing; }
+.batch-item[draggable="true"] { -webkit-user-drag:element; }
 .batch-item.invalid { border-color:#e6b49d; background:#fffaf7; }
 .batch-item.unsupported { background:#fafafa; border-style:dashed; }
-.drag-handle { color:#999; font-size:21px; text-align:center; cursor:grab; touch-action:none; user-select:none; }
-.drag-handle.disabled { opacity:.25; cursor:not-allowed; }
 .batch-item img,.image-placeholder { width:52px; height:52px; object-fit:cover; border-radius:6px; background:#eee; }
 .image-placeholder { display:flex; align-items:center; justify-content:center; color:#c65d3a; font-weight:600; }
 .item-info { min-width:0; display:flex; flex-direction:column; gap:3px; }
@@ -274,10 +257,7 @@ onBeforeUnmount(() => { draggingId = null })
 .item-info small { font-size:10px; color:#888; line-height:1.4; }
 .target-date { width:130px; min-width:0; border:1px solid #ddd; border-radius:7px; padding:7px; font:inherit; color:#333; background:#fff; font-size:11px; }
 .target-date:disabled { opacity:.35; }
-.reorder { display:flex; flex-direction:column; gap:3px; }
-.reorder button { width:27px; height:21px; border:0; border-radius:5px; background:#f2f2f2; color:#555; }
-.reorder button:disabled { opacity:.25; }
-.reorder .remove { background:#fff0eb; color:#b75a3b; font-size:16px; }
+.remove { width:27px; height:27px; border:0; border-radius:7px; background:#fff0eb; color:#b75a3b; font-size:17px; }
 .empty-list { text-align:center; color:#999; font-size:12px; padding:20px 0; }
 .batch-actions { display:flex; gap:10px; margin-top:14px; }
 .batch-actions button { border:0; border-radius:10px; padding:13px; font-size:14px; }
@@ -285,9 +265,9 @@ onBeforeUnmount(() => { draggingId = null })
 .batch-actions .primary { flex:2; background:#222; color:#fff; }
 .batch-actions button:disabled { opacity:.4; }
 @media (max-width:420px) {
-  .batch-item { grid-template-columns:20px 44px minmax(0,1fr) 28px; gap:7px; }
+  .batch-item { grid-template-columns:44px minmax(0,1fr) 28px; gap:7px; }
   .batch-item img,.image-placeholder { width:44px; height:44px; }
-  .target-date { grid-column:3 / 4; width:100%; box-sizing:border-box; }
-  .reorder { grid-column:4; grid-row:1 / span 2; }
+  .target-date { grid-column:2 / 3; width:100%; box-sizing:border-box; }
+  .remove { grid-column:3; grid-row:1 / span 2; }
 }
 </style>
