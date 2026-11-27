@@ -103,8 +103,9 @@ function assignMissingDates() {
         item.targetDate = ''
         continue
       }
-      if (item.manualDate && item.targetDate) {
-        // 手动指定的日期始终保持不变；重复日期交由校验提示，不自动挪动。
+      if (item.targetDate) {
+        // 已分配或手动修改过的日期都保持原样；重复日期必须留给用户处理，
+        // 不能在切换模式、删除其他照片时被自动顺延而悄悄消除。
         reserved.add(item.targetDate)
         continue
       }
