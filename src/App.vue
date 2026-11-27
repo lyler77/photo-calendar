@@ -31,6 +31,8 @@ const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
+const monthPickerVisible = ref(false)
+const monthPickerValue = ref(year.value + '-' + String(month.value).padStart(2, '0'))
 
 const exportVisible = ref(false)
 const exportLoading = ref(false)
@@ -117,6 +119,20 @@ function goToday() {
   const d = new Date()
   year.value = d.getFullYear()
   month.value = d.getMonth() + 1
+  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
+  monthPickerVisible.value = false
+}
+function openMonthPicker() {
+  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
+  monthPickerVisible.value = !monthPickerVisible.value
+}
+function applyMonthPicker() {
+  if (!/^\\d{4}-\\d{2}$/.test(monthPickerValue.value)) return
+  const [y, m] = monthPickerValue.value.split('-').map(Number)
+  if (m < 1 || m > 12) return
+  year.value = y
+  month.value = m
+  monthPickerVisible.value = false
 }
 
 function showSnackbar(message, actionLabel = '', onAction = null, duration = 2500) {
@@ -474,15 +490,20 @@ function showPrivacy() {
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
-      <div class="title-wrap" @click="goToday">
-        <div class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</div>
-        <div class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</div>
-      </div>
+      <button class="title-wrap" type="button" @click="openMonthPicker">
+        <span class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</span>
+        <span class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</span>
+      </button>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
 
+    <div v-if="monthPickerVisible" class="month-picker">
+      <input v-model="monthPickerValue" type="month" aria-label="选择年月" />
+      <button @click="applyMonthPicker">确定</button>
+      <button @click="goToday">回到本月</button>
+    </div>
+
     <div class="hint-row">
-      <p class="hint" :style="{ color: themeSubColor }">点空白格子添加照片；点已有照片可查看、更换或删除</p>
       <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
     </div>
 
@@ -584,14 +605,16 @@ function showPrivacy() {
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .help-btn { flex:0 0 auto; border:0; background:rgba(255,255,255,.35); border-radius:8px; padding:0 9px; height:28px; font-size:11px; cursor:pointer; backdrop-filter:blur(6px); }
-.nav-btn { width:40px; height:40px; border:none; background:rgba(255,255,255,.4); border-radius:10px; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); }
-.title-wrap { text-align:center; flex:1; cursor:pointer; }
-.title { font-size:18px; font-weight:600; }
-.subtitle { font-size:12px; margin-top:2px; }
-.hint-row { display:flex; align-items:center; justify-content:center; gap:8px; margin:4px 0 10px; }
-.hint { flex:1; font-size:12px; text-align:center; margin:0; }
+.nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); background:rgba(255,255,255,.4); border-radius:10px; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
+.title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; cursor:pointer; }
+.title { font-size:18px; line-height:1.35; font-weight:600; }
+.subtitle { font-size:12px; line-height:1.3; margin-top:2px; }
+.month-picker { display:flex; align-items:center; justify-content:center; gap:7px; margin:0 auto 10px; padding:9px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:10px; background:rgba(255,255,255,.78); }
+.month-picker input { min-width:0; border:1px solid #ddd; border-radius:7px; padding:6px; font:inherit; font-size:12px; }
+.month-picker button { border:0; border-radius:7px; padding:7px 9px; background:#222; color:#fff; font-size:11px; white-space:nowrap; }
+.hint-row { display:flex; align-items:center; justify-content:flex-end; margin:2px 0 5px; }
 .import-actions { display:flex; justify-content:center; margin:8px 0 12px; }
-.batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:8px 16px; border-radius:18px; font-size:12px; cursor:pointer; }
+.batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:7px 14px; border-radius:18px; font-size:12px; cursor:pointer; }
 .footer-note { font-size:11px; text-align:center; margin-top:16px; }
 .bottom-bar { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:50; display:flex; gap:10px; }
 .bar-btn { padding:12px 28px; border:none; border-radius:24px; background:rgba(0,0,0,.82); color:#fff; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.2); }
