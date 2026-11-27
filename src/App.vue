@@ -605,8 +605,8 @@ function showPrivacy() {
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .help-btn { flex:0 0 auto; border:0; background:rgba(255,255,255,.35); border-radius:8px; padding:0 9px; height:28px; font-size:11px; cursor:pointer; backdrop-filter:blur(6px); }
-.nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); background:rgba(255,255,255,.4); border-radius:10px; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
-.title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; cursor:pointer; }
+.nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
+.title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
 .title { font-size:18px; line-height:1.35; font-weight:600; }
 .subtitle { font-size:12px; line-height:1.3; margin-top:2px; }
 .month-picker { display:flex; align-items:center; justify-content:center; gap:7px; margin:0 auto 10px; padding:9px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:10px; background:rgba(255,255,255,.78); }
