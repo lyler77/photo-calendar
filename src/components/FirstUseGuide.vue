@@ -37,19 +37,19 @@ defineEmits(['start', 'close'])
         <ol class="steps">
           <li>
             <span class="step-number">01</span>
-            <div><strong>添加照片</strong><small>点击空白日期格可放入单张；点击已有照片可查看、更换或删除。也可用「添加照片」一次选择多张。</small></div>
+            <div><strong>添加照片</strong><small>点击空白日期格可从这天开始添加；「添加照片」从当月 1 号开始。两种入口都可一次选择多张，使用相同的日期安排方式。</small></div>
           </li>
           <li>
             <span class="step-number">02</span>
-            <div><strong>安排日期</strong><small>从日期格发起多选时，默认按该日期连续安排并替换已有照片；也可切换为只填空格。普通批量添加优先使用拍摄日期，无拍摄日期的照片可指定起始日期。</small></div>
+            <div><strong>安排日期</strong><small>默认按选择顺序从起始日期连续安排，已有照片会被替换；也可切换为只放入空格。每张照片会显示是否读到拍摄日期，安排日期也可以修改。</small></div>
           </li>
           <li>
             <span class="step-number">03</span>
-            <div><strong>调整照片</strong><small>在批量预览中按住照片行拖动排序，修改目标日期，或移除不需要的照片。确认后才会写入月历。</small></div>
+            <div><strong>调整照片</strong><small>在批量预览中修改照片的安排日期，或移除不需要的照片。确认后才会写入月历。</small></div>
           </li>
           <li>
             <span class="step-number">04</span>
-            <div><strong>调整并导出</strong><small>点击顶部年月可跳转到其他月份，也可返回本月；在「样式」中更换模板、背景和滤镜，点击「导出」保存单月或全年月历。</small></div>
+            <div><strong>调整并导出</strong><small>点击顶部年月可直接选择其他月份，离开本月后可点「回到本月」；在「样式」中更换模板、背景和滤镜，点击「导出」保存单月或全年月历。</small></div>
           </li>
         </ol>
 
