@@ -203,7 +203,7 @@ function confirm() {
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
-              <small v-else-if="item.shotDate">照片拍摄日期：{{ formatShotDate(item.shotDate) }}</small>
+              <small v-else-if="item.shotDate">拍摄于 {{ formatShotDate(item.shotDate).replace(/年|月/g, '/').replace(/日$/, '') }}</small>
               <small v-else>未读到拍摄日期</small>
               <small v-if="!item.error && isReplacement(item)" class="replace-notice">将替换原照片</small>
               <small v-else-if="!item.error && item.targetDate && occupiedSet.has(item.targetDate)" class="warning">日期已有照片</small>
@@ -269,7 +269,7 @@ function confirm() {
 .batch-actions button:disabled { opacity:.4; }
 @media (max-width:420px) {
   .batch-sheet { padding-left:14px; padding-right:14px; }
-  .batch-item { grid-template-columns:42px minmax(0,1fr) 112px 30px; gap:6px; min-height:60px; padding:7px; }
+  .batch-item { grid-template-columns:42px minmax(0,1fr) 30px; grid-template-rows:auto auto; column-gap:8px; row-gap:4px; min-height:68px; padding:7px; }\n  .batch-item > img,.batch-item > .image-placeholder { grid-column:1; grid-row:1 / span 2; }\n  .batch-item .item-info { grid-column:2; grid-row:1; }\n  .batch-item .target-date { grid-column:2; grid-row:2; width:100%; font-size:12px; padding:5px 6px; }\n  .batch-item .remove { grid-column:3; grid-row:1 / span 2; align-self:center; justify-self:center; }
   .batch-item img,.image-placeholder { width:42px; height:42px; }
   .target-date { font-size:11px; padding:7px 3px; }
   .remove { width:28px; height:28px; }
