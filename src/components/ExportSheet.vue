@@ -1,45 +1,12 @@
 <script setup>
-import { ref, watch } from 'vue'
-
-const props = defineProps({
+defineProps({
   visible: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   previewUrl: { type: String, default: '' },
   error: { type: String, default: '' },
   exportType: { type: String, default: 'month' }
 })
-const emit = defineEmits(['close', 'save', 'copy', 'change-type', 'submit-survey'])
-
-const showSurvey = ref(false)
-
-// 每次打开弹窗，或者重新生成图片时，检查是否需要显示问卷
-watch(
-  () => [props.visible, props.previewUrl],
-  ([isVisible, url]) => {
-    if (isVisible && url && !props.loading) {
-      const lastAsked = localStorage.getItem('ai_survey_time')
-      // 临时去掉时间限制，只要没填过或想测试，就强制弹出（测完可恢复 7 天逻辑）
-      if (!lastAsked) { 
-        showSurvey.value = true
-      }
-    }
-    if (!isVisible) {
-      showSurvey.value = false
-    }
-  },
-  { immediate: true }
-)
-
-function submitSurvey(price) {
-  emit('submit-survey', price)
-  localStorage.setItem('ai_survey_time', Date.now().toString())
-  showSurvey.value = false
-}
-
-function closeSurvey() {
-  localStorage.setItem('ai_survey_time', Date.now().toString())
-  showSurvey.value = false
-}
+defineEmits(['close', 'save', 'copy', 'change-type'])
 </script>
 
 <template>
@@ -78,18 +45,6 @@ function closeSurvey() {
         </div>
 
         <p class="tip">导出高清 JPEG。<br>iPhone 用户请直接<b>长按上方图片</b>，选择“存储到照片”。</p>
-
-        <!-- AI 意愿问卷 -->
-        <div v-if="showSurvey" class="survey-card">
-          <p class="survey-title">如果未来上线「AI 自动选图填满整月」，你愿意为此付费吗？</p>
-          <div class="survey-options">
-            <button @click="submitSurvey('9.9')">愿意付 9.9 元</button>
-            <button @click="submitSurvey('19.9')">愿意付 19.9 元</button>
-            <button @click="submitSurvey('no')">暂不感兴趣</button>
-          </div>
-          <button class="survey-close" @click="closeSurvey">以后再说</button>
-        </div>
-
       </div>
     </div>
   </Transition>
@@ -114,11 +69,4 @@ function closeSurvey() {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tip { text-align: center; font-size: 12px; color: #888; line-height: 1.6; margin: 12px 0 0; }
 .tip b { color: #333; }
-
-.survey-card { margin-top: 16px; padding: 14px; background: #f9f6f0; border-radius: 10px; border: 1px solid #f0e8d8; text-align: center; }
-.survey-title { font-size: 13px; color: #5a4a3a; margin: 0 0 10px; font-weight: 500; }
-.survey-options { display: flex; gap: 8px; justify-content: center; }
-.survey-options button { padding: 8px 12px; border: 1px solid #dcd1bf; background: #fff; color: #5a4a3a; border-radius: 16px; font-size: 12px; cursor: pointer; }
-.survey-options button:active { background: #f0e8d8; }
-.survey-close { margin-top: 10px; background: transparent; border: none; color: #a99c8a; font-size: 12px; cursor: pointer; text-decoration: underline; }
 </style>

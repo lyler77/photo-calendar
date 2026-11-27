@@ -6,6 +6,7 @@ import PhotoViewer from './components/PhotoViewer.vue'
 import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
 import ExportSheet from './components/ExportSheet.vue'
+import OnboardingGuide from './components/OnboardingGuide.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
@@ -22,6 +23,7 @@ const pickingDateKey = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
+const guideVisible = ref(false) // 新增：引导状态
 
 const exportVisible = ref(false)
 const exportLoading = ref(false)
@@ -69,6 +71,11 @@ onMounted(async () => {
   track('app_open')
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
+
+  // 新增：首次进入且没有照片，且没被提示过，则延迟 300ms 弹出引导
+  if (Object.keys(photos).length === 0 && !localStorage.getItem('guide_shown')) {
+    setTimeout(() => { guideVisible.value = true }, 300)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -85,6 +92,17 @@ watch(
   },
   { deep: true, immediate: true }
 )
+
+// 新增：关闭引导并记录
+function closeGuide() {
+  guideVisible.value = false
+  localStorage.setItem('guide_shown', '1')
+}
+
+// 新增：手动唤起引导
+function showGuideManually() {
+  guideVisible.value = true
+}
 
 function goPrev() {
   const r = prevMonth(year.value, month.value)
@@ -300,11 +318,6 @@ async function copyCaption() {
   }
 }
 
-function submitSurvey(price) {
-  track('ai_willingness', { price })
-  showSnackbar('感谢反馈！', '', null, 2000)
-}
-
 function showPrivacy() {
   alert('照片和作品只保存在你当前使用的手机或电脑浏览器中，不会上传到服务器。清理浏览器数据或更换设备可能导致作品丢失，建议及时导出保存。')
 }
@@ -346,14 +359,20 @@ function showPrivacy() {
 
     <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
 
+    <!-- 底部说明，增加了“查看示例”入口 -->
     <p class="footer-note" :style="{ color: themeSubColor }">
       作品仅保存在本机浏览器，<span style="text-decoration:underline;cursor:pointer" @click="showPrivacy">隐私说明</span>
+      <span style="margin: 0 6px; opacity: 0.5;">|</span>
+      <span style="text-decoration:underline;cursor:pointer" @click="showGuideManually">查看示例</span>
     </p>
 
     <div class="bottom-bar">
       <button class="bar-btn" @click="styleDrawerVisible = true">样式</button>
       <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
+
+    <!-- 挂载引导组件 -->
+    <OnboardingGuide :visible="guideVisible" @close="closeGuide" />
 
     <StyleDrawer
       :visible="styleDrawerVisible"
@@ -376,7 +395,6 @@ function showPrivacy() {
       @change-type="onChangeExportType"
       @save="saveExport"
       @copy="copyCaption"
-      @submit-survey="submitSurvey"
       @close="exportVisible = false"
     />
 
