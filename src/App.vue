@@ -14,7 +14,7 @@ import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
 import { readShotTime } from './composables/useExif'
 import { renderMonth, renderYear } from './composables/useExport'
 import { track } from './composables/useTrack'
-import { compressImage } from './composables/useImage'
+import { compressImage, loadBitmap } from './composables/useImage'
 
 const now = new Date()
 const year = ref(now.getFullYear())
@@ -170,17 +170,38 @@ async function onBatchFileChange(event) {
   releaseBatchPreviews()
   showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
 
-  // Promise.all 保留原始选择顺序，即使 EXIF 读取耗时不同
+  // 每张图片独立检查解码能力；单张不支持不会影响其他照片
   const results = await Promise.all(files.map(async (file, index) => {
-    const shotDate = await readShotTime(file)
-    return {
-      id: 'batch-' + Date.now() + '-' + index,
-      file,
-      name: file.name || ('照片 ' + (index + 1)),
-      previewUrl: URL.createObjectURL(file),
-      shotDate: shotDate ? formatDateKey(shotDate.getFullYear(), shotDate.getMonth() + 1, shotDate.getDate()) : '',
-      targetDate: '',
-      error: ''
+    const id = 'batch-' + Date.now() + '-' + index
+    const name = file.name || ('照片 ' + (index + 1))
+    try {
+      if (file.type && !file.type.startsWith('image/')) {
+        throw new Error('不是受支持的图片文件')
+      }
+      const bitmap = await loadBitmap(file)
+      if (bitmap?.close) bitmap.close()
+      const shotDate = await readShotTime(file)
+      return {
+        id,
+        file,
+        name,
+        previewUrl: URL.createObjectURL(file),
+        shotDate: shotDate ? formatDateKey(shotDate.getFullYear(), shotDate.getMonth() + 1, shotDate.getDate()) : '',
+        targetDate: '',
+        manualDate: false,
+        error: ''
+      }
+    } catch (error) {
+      return {
+        id,
+        file,
+        name,
+        previewUrl: '',
+        shotDate: '',
+        targetDate: '',
+        manualDate: false,
+        error: '格式暂不支持或图片已损坏，请移除后换用 JPG、PNG 或 WebP'
+      }
     }
   }))
 
@@ -190,6 +211,10 @@ async function onBatchFileChange(event) {
 }
 
 function updateBatchItems(items) {
+  const nextUrls = new Set(items.map(item => item.previewUrl).filter(Boolean))
+  for (const item of batchItems.value) {
+    if (item.previewUrl && !nextUrls.has(item.previewUrl)) URL.revokeObjectURL(item.previewUrl)
+  }
   batchItems.value = items
 }
 
@@ -202,8 +227,8 @@ function closeBatch() {
 async function confirmBatchImport(items) {
   const seen = new Set()
   for (const item of items) {
-    if (!item.targetDate || photos[item.targetDate] || seen.has(item.targetDate)) {
-      showSnackbar('有照片日期冲突，请调整后再导入')
+    if (item.error || !item.targetDate || photos[item.targetDate] || seen.has(item.targetDate)) {
+      showSnackbar('请移除不支持的图片，并处理日期冲突后再导入')
       return
     }
     seen.add(item.targetDate)
@@ -230,7 +255,7 @@ async function confirmBatchImport(items) {
     batchVisible.value = false
     releaseBatchPreviews()
     showSnackbar(
-      failed ? '成功导入 ' + succeeded.length + ' 张，' + failed + ' 张失败' : '已导入 ' + succeeded.length + ' 张照片',
+      failed ? '成功导入 ' + succeeded.length + ' 张，' + failed + ' 张处理失败' : '已导入 ' + succeeded.length + ' 张照片',
       '', null, 3500
     )
   } catch (err) {
@@ -424,16 +449,16 @@ function showPrivacy() {
 </script>
 
 <template>
-  <div 
+  <div
     class="bg-layer"
     :style="hasBgImage ? { backgroundImage: `url(${style.backgroundImageUrl})` } : null"
   />
-  <div 
+  <div
     class="bg-overlay"
     v-if="hasBgImage"
     :style="{ backgroundColor: `rgba(0, 0, 0, ${style.backgroundOverlayOpacity})` }"
   />
-  
+
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
@@ -475,6 +500,11 @@ function showPrivacy() {
 
     <FirstUseGuide
       :visible="guideVisible"
+      :background-color="style.backgroundColor"
+      :text-color="currentTemplate.textColor"
+      :muted-color="currentTemplate.weekLabelColor"
+      :border-color="currentTemplate.cellBorderColor"
+      :has-bg-image="hasBgImage"
       @start="startFromGuide"
       @close="dismissGuide"
     />
@@ -535,20 +565,20 @@ function showPrivacy() {
 </template>
 
 <style scoped>
-.bg-layer { position: fixed; inset: 0; background-size: cover; background-position: center; z-index: -2; }
-.bg-overlay { position: fixed; inset: 0; z-index: -1; }
-.app { max-width: 560px; margin: 0 auto; padding: 12px 14px 120px; font-family: -apple-system, 'PingFang SC', sans-serif; color: #222; min-height: 100vh; }
-.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.bg-layer { position:fixed; inset:0; background-size:cover; background-position:center; z-index:-2; }
+.bg-overlay { position:fixed; inset:0; z-index:-1; }
+.app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
+.header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .help-btn { border:0; background:rgba(255,255,255,.4); border-radius:10px; padding:0 10px; height:36px; font-size:12px; cursor:pointer; backdrop-filter:blur(6px); }
-.nav-btn { width: 40px; height: 40px; border: none; background: rgba(255, 255, 255, 0.4); border-radius: 10px; font-size: 22px; cursor: pointer; backdrop-filter: blur(6px); }
-.title-wrap { text-align: center; flex: 1; cursor: pointer; }
-.title { font-size: 18px; font-weight: 600; }
-.subtitle { font-size: 12px; margin-top: 2px; }
-.hint { font-size: 12px; text-align: center; margin: 4px 0 10px; }
-.import-actions { display:flex; justify-content:center; margin: 8px 0 12px; }
+.nav-btn { width:40px; height:40px; border:none; background:rgba(255,255,255,.4); border-radius:10px; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); }
+.title-wrap { text-align:center; flex:1; cursor:pointer; }
+.title { font-size:18px; font-weight:600; }
+.subtitle { font-size:12px; margin-top:2px; }
+.hint { font-size:12px; text-align:center; margin:4px 0 10px; }
+.import-actions { display:flex; justify-content:center; margin:8px 0 12px; }
 .batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:8px 16px; border-radius:18px; font-size:12px; cursor:pointer; }
-.footer-note { font-size: 11px; text-align: center; margin-top: 16px; }
-.bottom-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; gap: 10px; }
-.bar-btn { padding: 12px 28px; border: none; border-radius: 24px; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
-.bar-btn.primary { background: #ff6b6b; }
+.footer-note { font-size:11px; text-align:center; margin-top:16px; }
+.bottom-bar { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:50; display:flex; gap:10px; }
+.bar-btn { padding:12px 28px; border:none; border-radius:24px; background:rgba(0,0,0,.82); color:#fff; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+.bar-btn.primary { background:#ff6b6b; }
 </style>
