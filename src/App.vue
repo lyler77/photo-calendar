@@ -6,22 +6,38 @@ import PhotoViewer from './components/PhotoViewer.vue'
 import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
 import ExportSheet from './components/ExportSheet.vue'
+import BatchImportSheet from './components/BatchImportSheet.vue'
+import FirstUseGuide from './components/FirstUseGuide.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
 import { readShotTime } from './composables/useExif'
 import { renderMonth, renderYear } from './composables/useExport'
 import { track } from './composables/useTrack'
+import { compressImage, loadBitmap } from './composables/useImage'
 
 const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
 
-const fileInput = ref(null)
-const pickingDateKey = ref('')
+const batchFileInput = ref(null)
+const batchVisible = ref(false)
+const batchBusy = ref(false)
+const batchItems = ref([])
+const guideVisible = ref(false)
+const batchAnchorDate = ref('')
+const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
+const monthPickerVisible = ref(false)
+const draftYear = ref(year.value)
+const draftMonth = ref(month.value)
+const yearOptions = Array.from({ length: 201 }, (_, i) => 1900 + i)
+const isCurrentMonth = computed(() => {
+  const current = new Date()
+  return year.value === current.getFullYear() && month.value === current.getMonth() + 1
+})
 
 const exportVisible = ref(false)
 const exportLoading = ref(false)
@@ -38,7 +54,7 @@ const {
   applyLoaded, getSnapshot
 } = useStyle()
 
-const { photos, init, addPhoto, removePhoto, scheduleSave } = usePhotos({
+const { photos, init, loadError, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
   yearRef: year,
   monthRef: month,
   getStyleSnapshot: getSnapshot,
@@ -58,24 +74,26 @@ const themeTextColor = computed(() => hasBgImage.value ? '#ffffff' : currentTemp
 const themeSubColor = computed(() => hasBgImage.value ? 'rgba(255,255,255,0.7)' : currentTemplate.value.weekLabelColor)
 
 const cells = computed(() => buildMonthGrid(year.value, month.value))
-const filledCount = computed(() =>
-  Object.keys(photos).filter(k => {
-    const [y, m] = k.split('-').map(Number)
-    return y === year.value && m === month.value
-  }).length
-)
-
 onMounted(async () => {
   track('app_open')
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
+  if (loadError.value) return
+  try {
+    guideVisible.value = Object.keys(photos).length === 0 &&
+      localStorage.getItem('photo_calendar_guide_seen') !== '1'
+  } catch {
+    guideVisible.value = Object.keys(photos).length === 0
+  }
 })
 
 onBeforeUnmount(() => {
   if (exportPreviewUrl.value) URL.revokeObjectURL(exportPreviewUrl.value)
 })
 
-watch([year, month], () => { scheduleSave() })
+watch([year, month], () => {
+  scheduleSave()
+})
 
 watch(
   () => ({ ...style }),
@@ -103,6 +121,19 @@ function goToday() {
   year.value = d.getFullYear()
   month.value = d.getMonth() + 1
 }
+function openMonthPicker() {
+  draftYear.value = year.value
+  draftMonth.value = month.value
+  monthPickerVisible.value = true
+}
+function confirmMonthPicker() {
+  year.value = draftYear.value
+  month.value = draftMonth.value
+  monthPickerVisible.value = false
+}
+function cancelMonthPicker() {
+  monthPickerVisible.value = false
+}
 
 function showSnackbar(message, actionLabel = '', onAction = null, duration = 2500) {
   snackbar.value = { message, actionLabel, onAction }
@@ -120,8 +151,164 @@ function onSnackbarAction() {
 }
 
 function openPicker(dateKey) {
-  pickingDateKey.value = dateKey
-  fileInput.value?.click()
+  batchAnchorDate.value = dateKey
+  batchInitialDate.value = dateKey
+  batchFileInput.value?.click()
+}
+
+function openBatchPicker() {
+  const firstDay = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
+  batchAnchorDate.value = firstDay
+  batchInitialDate.value = firstDay
+  batchFileInput.value?.click()
+}
+
+function dismissGuide() {
+  guideVisible.value = false
+  try {
+    localStorage.setItem('photo_calendar_guide_seen', '1')
+  } catch {
+    // 浏览器禁用本地存储时，不影响照片月历的使用
+  }
+}
+function startFromGuide() {
+  dismissGuide()
+  openBatchPicker()
+}
+
+function releaseBatchPreviews() {
+  for (const item of batchItems.value) {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  }
+  batchItems.value = []
+}
+
+async function onBatchFileChange(event) {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  if (!files.length) return
+
+  releaseBatchPreviews()
+  showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
+
+  // 每张图片独立检查解码能力；单张不支持不会影响其他照片
+  const results = await mapWithConcurrency(files, 2, async (file, index) => {
+    const id = 'batch-' + Date.now() + '-' + index
+    const name = file.name || ('照片 ' + (index + 1))
+    try {
+      if (file.type && !file.type.startsWith('image/')) {
+        throw new Error('不是受支持的图片文件')
+      }
+      const bitmap = await loadBitmap(file)
+      if (bitmap?.close) bitmap.close()
+      const shotDate = await readShotTime(file)
+      return {
+        id,
+        file,
+        name,
+        previewUrl: URL.createObjectURL(file),
+        shotDate: shotDate ? formatDateKey(shotDate.getFullYear(), shotDate.getMonth() + 1, shotDate.getDate()) : '',
+        targetDate: '',
+        manualDate: false,
+        error: ''
+      }
+    } catch (error) {
+      return {
+        id,
+        file,
+        name,
+        previewUrl: '',
+        shotDate: '',
+        targetDate: '',
+        manualDate: false,
+        error: '格式暂不支持或图片已损坏，请移除后换用 JPG、PNG 或 WebP'
+      }
+    }
+  })
+
+  batchItems.value = results
+  batchVisible.value = true
+  closeSnackbar()
+}
+
+function updateBatchItems(items) {
+  const nextUrls = new Set(items.map(item => item.previewUrl).filter(Boolean))
+  for (const item of batchItems.value) {
+    if (item.previewUrl && !nextUrls.has(item.previewUrl)) URL.revokeObjectURL(item.previewUrl)
+  }
+  batchItems.value = items
+}
+
+function closeBatch() {
+  if (batchBusy.value) return
+  batchVisible.value = false
+  releaseBatchPreviews()
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  async function worker() {
+    while (true) {
+      const index = nextIndex++
+      if (index >= items.length) return
+      results[index] = await mapper(items[index], index)
+    }
+  }
+  const workerCount = Math.min(Math.max(1, limit), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
+function reloadAfterStorageError() {
+  window.location.reload()
+}
+
+async function confirmBatchImport(items) {
+  const seen = new Set()
+  for (const item of items) {
+    if (
+      item.error ||
+      !item.targetDate ||
+      (photos[item.targetDate] && !item.replaceExisting) ||
+      seen.has(item.targetDate)
+    ) {
+      showSnackbar('请移除不支持的图片，并处理日期冲突后再导入')
+      return
+    }
+    seen.add(item.targetDate)
+  }
+
+  batchBusy.value = true
+  showSnackbar('正在处理照片，请稍候…', '', null, 10000)
+  try {
+    const results = await mapWithConcurrency(items, 2, async item => {
+      try {
+        const image = await compressImage(item.file, 2000)
+        return { dateKey: item.targetDate, ...image, error: '' }
+      } catch (error) {
+        return { dateKey: item.targetDate, error: error?.message || '图片处理失败' }
+      }
+    })
+    const succeeded = results.filter(item => !item.error)
+    if (succeeded.length) {
+      addPreparedPhotos(succeeded)
+      dismissGuide()
+    }
+    const failed = results.length - succeeded.length
+    track('photo_batch_import', { count: succeeded.length, failed })
+    batchVisible.value = false
+    releaseBatchPreviews()
+    showSnackbar(
+      failed ? '成功导入 ' + succeeded.length + ' 张，' + failed + ' 张处理失败' : '已导入 ' + succeeded.length + ' 张照片',
+      '', null, 3500
+    )
+  } catch (err) {
+    console.error('批量导入失败', err)
+    showSnackbar('照片处理失败，请减少数量或检查图片格式后重试', '', null, 4000)
+  } finally {
+    batchBusy.value = false
+  }
 }
 function onCellClick(dateKey) {
   if (photos[dateKey]) selectedDateKey.value = dateKey
@@ -162,49 +349,6 @@ function movePhoto(fromKey, toKey) {
   showSnackbar('已移到对应日期', '', null, 1500)
 }
 
-async function onFileChange(e) {
-  const f = e.target.files?.[0]
-  e.target.value = ''
-  const dateKey = pickingDateKey.value
-  pickingDateKey.value = ''
-  if (!f || !dateKey) return
-
-  showSnackbar('处理中…', '', null, 10000)
-
-  try {
-    const shot = await readShotTime(f)
-    await addPhoto(dateKey, f)
-    track('photo_select', { hasExif: !!shot })
-
-    if (!shot) {
-      showSnackbar('未读取到拍摄时间，已放入当前格')
-      return
-    }
-    const shotKey = formatDateKey(shot.getFullYear(), shot.getMonth() + 1, shot.getDate())
-    if (shotKey === dateKey) {
-      showSnackbar('已填入', '', null, 1200)
-      return
-    }
-    const [sy, sm, sd] = shotKey.split('-').map(Number)
-    const sameMonth = sy === year.value && sm === month.value
-    if (sameMonth) {
-      track('exif_mismatch_shown')
-      showSnackbar(
-        `这张拍摄于 ${sm}月${sd}日，已放入 ${month.value}月${dayOf(dateKey)}日`,
-        `移到 ${sm}月${sd}日`,
-        () => {
-          track('exif_move_click')
-          movePhoto(dateKey, shotKey)
-        },
-        4000
-      )
-    } else {
-      showSnackbar(`这张拍摄于 ${sy}年${sm}月${sd}日，已放入当前格`, '', null, 3000)
-    }
-  } catch (err) {
-    showSnackbar('这张图暂时无法识别，请在相册里截图或转成 JPEG 再选', '', null, 3000)
-  }
-}
 
 async function onUploadBg(file) {
   showSnackbar('背景图处理中…', '', null, 3000)
@@ -279,7 +423,8 @@ async function copyCaption() {
   const period = exportType.value === 'month'
     ? `${year.value}年${month.value}月`
     : `${year.value}年`
-  const text = `我的 ${period}照片月历｜把相册里的日子拼回来了 📅✨\n#照片月历 #生活记录`
+  const text = `我的 ${period}照片月历｜把相册里的日子拼回来了 📅✨
+#照片月历 #生活记录`
   try {
     await navigator.clipboard.writeText(text)
     track('caption_copy')
@@ -300,39 +445,51 @@ async function copyCaption() {
   }
 }
 
-function submitSurvey(price) {
-  track('ai_willingness', { price })
-  showSnackbar('感谢反馈！', '', null, 2000)
-}
-
 function showPrivacy() {
   alert('照片和作品只保存在你当前使用的手机或电脑浏览器中，不会上传到服务器。清理浏览器数据或更换设备可能导致作品丢失，建议及时导出保存。')
 }
 </script>
 
 <template>
-  <div 
+  <div
     class="bg-layer"
     :style="hasBgImage ? { backgroundImage: `url(${style.backgroundImageUrl})` } : null"
   />
-  <div 
+  <div
     class="bg-overlay"
     v-if="hasBgImage"
     :style="{ backgroundColor: `rgba(0, 0, 0, ${style.backgroundOverlayOpacity})` }"
   />
-  
+
+  <div v-if="loadError" class="storage-error-mask">
+    <section class="storage-error-panel" role="alert">
+      <h2>暂时无法读取本地作品</h2>
+      <p>为了避免覆盖原有照片和设置，已暂停编辑与自动保存。请先刷新页面重试，不要清除浏览器数据。</p>
+      <button type="button" @click="reloadAfterStorageError">刷新页面</button>
+    </section>
+  </div>
+
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
-      <div class="title-wrap" @click="goToday">
-        <div class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</div>
-        <div class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</div>
-      </div>
+      <button class="title-wrap" type="button" @click="openMonthPicker">
+        <span class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</span>
+      </button>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
+    <div v-if="!isCurrentMonth" class="today-row">
+      <button class="today-link" @click="goToday">回到本月</button>
+    </div>
 
-    <p class="hint" :style="{ color: themeSubColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
-
+    <div v-if="monthPickerVisible" class="month-picker-mask" @click.self="cancelMonthPicker">
+      <section class="month-picker-panel" role="dialog" aria-modal="true" aria-label="选择年月">
+        <header><button type="button" @click="cancelMonthPicker">取消</button><strong>选择年月</strong><button type="button" @click="confirmMonthPicker">完成</button></header>
+        <div class="month-picker-fields">
+          <label><select v-model.number="draftYear" aria-label="年份"><option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option></select></label>
+          <label><select v-model.number="draftMonth" aria-label="月份"><option v-for="m in 12" :key="m" :value="m">{{ m }} 月</option></select></label>
+        </div>
+      </section>
+    </div>
     <CalendarGrid
       :cells="cells"
       :photos="photos"
@@ -344,7 +501,11 @@ function showPrivacy() {
       @cell-click="onCellClick"
     />
 
-    <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
+    <div class="import-actions">
+      <button class="batch-import-btn" @click="openBatchPicker">添加照片</button>
+      <button class="help-link" :style="{ color: themeSubColor }" @click="guideVisible = true">使用说明</button>
+    </div>
+    <input ref="batchFileInput" type="file" accept="image/*" multiple hidden @change="onBatchFileChange" />
 
     <p class="footer-note" :style="{ color: themeSubColor }">
       作品仅保存在本机浏览器，<span style="text-decoration:underline;cursor:pointer" @click="showPrivacy">隐私说明</span>
@@ -354,6 +515,29 @@ function showPrivacy() {
       <button class="bar-btn" @click="styleDrawerVisible = true">样式</button>
       <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
+
+    <FirstUseGuide
+      :visible="guideVisible"
+      :background-color="style.backgroundColor"
+      :text-color="currentTemplate.textColor"
+      :muted-color="currentTemplate.weekLabelColor"
+      :border-color="currentTemplate.cellBorderColor"
+      :has-bg-image="hasBgImage"
+      @start="startFromGuide"
+      @close="dismissGuide"
+    />
+
+    <BatchImportSheet
+      :visible="batchVisible"
+      :items="batchItems"
+      :existing-keys="Object.keys(photos)"
+      :initial-date="batchInitialDate"
+      :anchor-date="batchAnchorDate"
+      :busy="batchBusy"
+      @update:items="updateBatchItems"
+      @confirm="confirmBatchImport"
+      @close="closeBatch"
+    />
 
     <StyleDrawer
       :visible="styleDrawerVisible"
@@ -376,7 +560,6 @@ function showPrivacy() {
       @change-type="onChangeExportType"
       @save="saveExport"
       @copy="copyCaption"
-      @submit-survey="submitSurvey"
       @close="exportVisible = false"
     />
 
@@ -401,17 +584,33 @@ function showPrivacy() {
 </template>
 
 <style scoped>
-.bg-layer { position: fixed; inset: 0; background-size: cover; background-position: center; z-index: -2; }
-.bg-overlay { position: fixed; inset: 0; z-index: -1; }
-.app { max-width: 560px; margin: 0 auto; padding: 12px 14px 120px; font-family: -apple-system, 'PingFang SC', sans-serif; color: #222; min-height: 100vh; }
-.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.nav-btn { width: 40px; height: 40px; border: none; background: rgba(255, 255, 255, 0.4); border-radius: 10px; font-size: 22px; cursor: pointer; backdrop-filter: blur(6px); }
-.title-wrap { text-align: center; flex: 1; cursor: pointer; }
-.title { font-size: 18px; font-weight: 600; }
-.subtitle { font-size: 12px; margin-top: 2px; }
-.hint { font-size: 12px; text-align: center; margin: 4px 0 10px; }
-.footer-note { font-size: 11px; text-align: center; margin-top: 16px; }
-.bottom-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; gap: 10px; }
-.bar-btn { padding: 12px 28px; border: none; border-radius: 24px; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
-.bar-btn.primary { background: #ff6b6b; }
+.storage-error-mask { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.55); }
+.storage-error-panel { width:min(100%,380px); padding:24px; border-radius:16px; background:#fff; color:#222; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+.storage-error-panel h2 { margin:0 0 12px; font-size:18px; }
+.storage-error-panel p { margin:0 0 20px; color:#666; font-size:14px; line-height:1.7; }
+.storage-error-panel button { width:100%; padding:12px; border:0; border-radius:9px; background:#222; color:#fff; font:inherit; }
+.bg-layer { position:fixed; inset:0; background-size:cover; background-position:center; z-index:-2; }
+.bg-overlay { position:fixed; inset:0; z-index:-1; }
+.app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
+.header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+
+.nav-btn { touch-action:manipulation; -webkit-tap-highlight-color:transparent; display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
+.title-wrap { -webkit-appearance:none; appearance:none; color:inherit; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; min-height:40px; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
+.title { font-size:18px; line-height:1.35; font-weight:600; pointer-events:none; }
+.month-picker-mask { position:fixed; inset:0; z-index:220; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.42); }
+.month-picker-panel { width:min(100%,360px); padding:18px; border-radius:16px; background:#fff; color:#222; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+.month-picker-panel header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; }
+.month-picker-panel header button { border:0; background:transparent; color:#555; padding:8px 4px; font:inherit; font-size:14px; }
+.month-picker-panel header button:last-child { color:#222; font-weight:600; }
+.month-picker-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.month-picker-fields select { width:100%; padding:12px 10px; border:1px solid #ddd; border-radius:10px; background:#fff; color:#222; font:inherit; font-size:16px; }
+.today-row { display:flex; justify-content:center; margin:-2px 0 8px; }
+.today-link { border:0; background:transparent; color:#888; padding:3px 8px; font:inherit; font-size:11px; cursor:pointer; }
+.import-actions { display:flex; flex-direction:column; align-items:center; gap:7px; margin:10px 0 12px; }
+.help-link { border:0; background:transparent; padding:3px 8px; font-size:11px; cursor:pointer; opacity:.8; }
+.batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:7px 14px; border-radius:18px; font-size:12px; cursor:pointer; }
+.footer-note { font-size:11px; text-align:center; margin-top:16px; }
+.bottom-bar { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:50; display:flex; gap:10px; }
+.bar-btn { padding:12px 28px; border:none; border-radius:24px; background:rgba(0,0,0,.82); color:#fff; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+.bar-btn.primary { background:#ff6b6b; }
 </style>
