@@ -32,20 +32,24 @@ defineEmits(['start', 'close'])
           <button class="guide-close" aria-label="关闭帮助" @click="$emit('close')">×</button>
         </header>
 
-        <p class="intro">选择照片，确认日期，再调整样式并导出。整个过程都在当前设备完成。</p>
+        <p class="intro">照片只保存在当前设备。添加后可随时调整，再导出月历。</p>
 
         <ol class="steps">
           <li>
             <span class="step-number">01</span>
-            <div><strong>添加照片</strong><small>一次选择一张或多张照片</small></div>
+            <div><strong>添加照片</strong><small>点击空白日期格可放入单张；点击已有照片可查看、更换或删除。也可用「添加照片」一次选择多张。</small></div>
           </li>
           <li>
             <span class="step-number">02</span>
-            <div><strong>安排日期</strong><small>优先按拍摄日期安排，也可以手动调整</small></div>
+            <div><strong>安排日期</strong><small>从日期格发起多选时，默认按该日期连续安排并替换已有照片；也可切换为只填空格。普通批量添加优先使用拍摄日期，无拍摄日期的照片可指定起始日期。</small></div>
           </li>
           <li>
             <span class="step-number">03</span>
-            <div><strong>调整并导出</strong><small>更换模板、背景和滤镜，保存月历图片</small></div>
+            <div><strong>调整照片</strong><small>在批量预览中按住照片行拖动排序，修改目标日期，或移除不需要的照片。确认后才会写入月历。</small></div>
+          </li>
+          <li>
+            <span class="step-number">04</span>
+            <div><strong>调整并导出</strong><small>在「样式」中更换模板、背景和滤镜；点击「导出」保存单月或全年月历。</small></div>
           </li>
         </ol>
 
@@ -66,7 +70,7 @@ h2 { font-size:19px; line-height:1.35; margin:0; font-weight:600; letter-spacing
 .guide-close { flex:0 0 auto; width:30px; height:30px; border:0; border-radius:50%; background:rgba(128,128,128,.12); color:var(--guide-text); font-size:20px; }
 .intro { color:var(--guide-muted); font-size:12px; line-height:1.65; margin:10px 0 16px; }
 .steps { list-style:none; padding:0; margin:0 0 18px; display:flex; flex-direction:column; gap:0; }
-.steps li { display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:center; padding:12px 0; border-top:1px solid var(--guide-border); }
+.steps li { display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:start; padding:12px 0; border-top:1px solid var(--guide-border); }
 .step-number { font-size:11px; color:var(--guide-muted); font-variant-numeric:tabular-nums; }
 .steps strong { display:block; font-size:13px; font-weight:600; }
 .steps small { display:block; font-size:11px; line-height:1.5; color:var(--guide-muted); margin-top:3px; }
