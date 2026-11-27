@@ -197,9 +197,7 @@ function confirm() {
             v-for="(item, index) in localItems"
             :key="item.id"
             class="batch-item"
-            :data-batch-id="item.id"
-            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)) || duplicateKeys.has(item.targetDate), unsupported: item.error, dragging: draggingId === item.id }"
-            @pointerdown="onPointerDown($event, item.id)"
+            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)), unsupported: item.error }"
           >
             <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
             <div v-else class="image-placeholder">!</div>
