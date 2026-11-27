@@ -33,6 +33,10 @@ const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
 const monthPickerVisible = ref(false)
 const monthPickerValue = ref(year.value + '-' + String(month.value).padStart(2, '0'))
+const isCurrentMonth = computed(() => {
+  const current = new Date()
+  return year.value === current.getFullYear() && month.value === current.getMonth() + 1
+})
 
 const exportVisible = ref(false)
 const exportLoading = ref(false)
@@ -491,12 +495,10 @@ function showPrivacy() {
 
     <div v-if="monthPickerVisible" class="month-picker">
       <input v-model="monthPickerValue" type="month" aria-label="选择年月" />
-      <button @click="applyMonthPicker">确定</button>
-      <button @click="goToday">回到本月</button>
-    </div>
-
-    <div class="hint-row">
-      <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
+      <div class="month-picker-actions">
+        <button v-if="!isCurrentMonth" class="today-link" @click="goToday">回到本月</button>
+        <button class="month-done" @click="applyMonthPicker">完成</button>
+      </div>
     </div>
 
     <CalendarGrid
@@ -512,6 +514,7 @@ function showPrivacy() {
 
     <div class="import-actions">
       <button class="batch-import-btn" @click="openBatchPicker">添加照片</button>
+      <button class="help-link" :style="{ color: themeSubColor }" @click="guideVisible = true">使用说明</button>
     </div>
     <input ref="batchFileInput" type="file" accept="image/*" multiple hidden @change="onBatchFileChange" />
 
@@ -596,15 +599,18 @@ function showPrivacy() {
 .bg-overlay { position:fixed; inset:0; z-index:-1; }
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.help-btn { flex:0 0 auto; border:0; background:rgba(255,255,255,.35); border-radius:8px; padding:0 9px; height:28px; font-size:11px; cursor:pointer; backdrop-filter:blur(6px); }
+
 .nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
 .title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
 .title { font-size:18px; line-height:1.35; font-weight:600; }
-.month-picker { display:flex; align-items:center; justify-content:center; gap:7px; margin:0 auto 10px; padding:9px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:10px; background:rgba(255,255,255,.78); }
-.month-picker input { min-width:0; border:1px solid #ddd; border-radius:7px; padding:6px; font:inherit; font-size:12px; }
-.month-picker button { border:0; border-radius:7px; padding:7px 9px; background:#222; color:#fff; font-size:11px; white-space:nowrap; }
-.hint-row { display:flex; align-items:center; justify-content:flex-end; margin:2px 0 5px; }
-.import-actions { display:flex; justify-content:center; margin:8px 0 12px; }
+.month-picker { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0 auto 10px; padding:10px 12px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:12px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px); }
+.month-picker input { min-width:0; border:1px solid rgba(128,128,128,.25); border-radius:8px; padding:7px 9px; font:inherit; font-size:14px; color:#222; background:rgba(255,255,255,.8); }
+.month-picker-actions { display:flex; align-items:center; justify-content:center; gap:18px; min-height:28px; }
+.month-picker-actions button { border:0; background:transparent; font:inherit; font-size:12px; cursor:pointer; }
+.month-picker-actions .today-link { color:#777; }
+.month-picker-actions .month-done { color:#222; font-weight:600; }
+.import-actions { display:flex; flex-direction:column; align-items:center; gap:7px; margin:10px 0 12px; }
+.help-link { border:0; background:transparent; padding:3px 8px; font-size:11px; cursor:pointer; opacity:.8; }
 .batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:7px 14px; border-radius:18px; font-size:12px; cursor:pointer; }
 .footer-note { font-size:11px; text-align:center; margin-top:16px; }
 .bottom-bar { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:50; display:flex; gap:10px; }
