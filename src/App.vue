@@ -69,13 +69,6 @@ const themeTextColor = computed(() => hasBgImage.value ? '#ffffff' : currentTemp
 const themeSubColor = computed(() => hasBgImage.value ? 'rgba(255,255,255,0.7)' : currentTemplate.value.weekLabelColor)
 
 const cells = computed(() => buildMonthGrid(year.value, month.value))
-const filledCount = computed(() =>
-  Object.keys(photos).filter(k => {
-    const [y, m] = k.split('-').map(Number)
-    return y === year.value && m === month.value
-  }).length
-)
-
 onMounted(async () => {
   track('app_open')
   const loadedStyle = await init()
@@ -492,7 +485,6 @@ function showPrivacy() {
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
       <button class="title-wrap" type="button" @click="openMonthPicker">
         <span class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</span>
-        <span class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</span>
       </button>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
@@ -608,7 +600,6 @@ function showPrivacy() {
 .nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
 .title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
 .title { font-size:18px; line-height:1.35; font-weight:600; }
-.subtitle { font-size:12px; line-height:1.3; margin-top:2px; }
 .month-picker { display:flex; align-items:center; justify-content:center; gap:7px; margin:0 auto 10px; padding:9px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:10px; background:rgba(255,255,255,.78); }
 .month-picker input { min-width:0; border:1px solid #ddd; border-radius:7px; padding:6px; font:inherit; font-size:12px; }
 .month-picker button { border:0; border-radius:7px; padding:7px 9px; background:#222; color:#fff; font-size:11px; white-space:nowrap; }
