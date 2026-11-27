@@ -26,6 +26,7 @@ const batchBusy = ref(false)
 const batchItems = ref([])
 const guideVisible = ref(false)
 const pickingDateKey = ref('')
+const batchAnchorDate = ref('')
 const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
@@ -135,12 +136,14 @@ function onSnackbarAction() {
 
 function openPicker(dateKey) {
   pickingDateKey.value = dateKey
+  batchAnchorDate.value = dateKey
   batchInitialDate.value = dateKey
   batchFileInput.value?.click()
 }
 
 function openBatchPicker() {
   pickingDateKey.value = ''
+  batchAnchorDate.value = ''
   batchInitialDate.value = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
   batchFileInput.value?.click()
 }
@@ -237,7 +240,12 @@ function closeBatch() {
 async function confirmBatchImport(items) {
   const seen = new Set()
   for (const item of items) {
-    if (item.error || !item.targetDate || photos[item.targetDate] || seen.has(item.targetDate)) {
+    if (
+      item.error ||
+      !item.targetDate ||
+      (photos[item.targetDate] && !item.replaceExisting) ||
+      seen.has(item.targetDate)
+    ) {
       showSnackbar('请移除不支持的图片，并处理日期冲突后再导入')
       return
     }
@@ -519,6 +527,7 @@ function showPrivacy() {
       :items="batchItems"
       :existing-keys="Object.keys(photos)"
       :initial-date="batchInitialDate"
+      :anchor-date="batchAnchorDate"
       :busy="batchBusy"
       @update:items="updateBatchItems"
       @confirm="confirmBatchImport"
