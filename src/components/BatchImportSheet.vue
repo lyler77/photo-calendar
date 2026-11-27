@@ -192,7 +192,7 @@ function confirm() {
     replaceExisting: isReplacement(item)
   })))
 }
-onBeforeUnmount(() => { draggingId = null; pointerId = null })
+onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
 </script>
 
 <template>
