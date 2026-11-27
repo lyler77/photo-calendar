@@ -31,7 +31,6 @@ const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
-const monthPickerVisible = ref(false)
 const monthPickerValue = ref(year.value + '-' + String(month.value).padStart(2, '0'))
 const isCurrentMonth = computed(() => {
   const current = new Date()
@@ -53,7 +52,7 @@ const {
   applyLoaded, getSnapshot
 } = useStyle()
 
-const { photos, init, addPhoto, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
+const { photos, init, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
   yearRef: year,
   monthRef: month,
   getStyleSnapshot: getSnapshot,
@@ -117,19 +116,13 @@ function goToday() {
   year.value = d.getFullYear()
   month.value = d.getMonth() + 1
   monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
-  monthPickerVisible.value = false
 }
-function openMonthPicker() {
-  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
-  monthPickerVisible.value = !monthPickerVisible.value
-}
-function applyMonthPicker() {
-  if (!/^\d{4}-\d{2}$/.test(monthPickerValue.value)) return
+function onMonthChange() {
+  if (!/^\\d{4}-\\d{2}$/.test(monthPickerValue.value)) return
   const [y, m] = monthPickerValue.value.split('-').map(Number)
   if (m < 1 || m > 12) return
   year.value = y
   month.value = m
-  monthPickerVisible.value = false
 }
 
 function showSnackbar(message, actionLabel = '', onAction = null, duration = 2500) {
@@ -155,9 +148,10 @@ function openPicker(dateKey) {
 }
 
 function openBatchPicker() {
+  const firstDay = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
   pickingDateKey.value = ''
-  batchAnchorDate.value = ''
-  batchInitialDate.value = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
+  batchAnchorDate.value = firstDay
+  batchInitialDate.value = firstDay
   batchFileInput.value?.click()
 }
 
@@ -185,12 +179,6 @@ async function onBatchFileChange(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
   if (!files.length) return
-  if (pickingDateKey.value && files.length === 1) {
-    const dateKey = pickingDateKey.value
-    pickingDateKey.value = ''
-    await addSinglePhoto(files[0], dateKey)
-    return
-  }
   pickingDateKey.value = ''
 
   releaseBatchPreviews()
@@ -335,44 +323,6 @@ function movePhoto(fromKey, toKey) {
   showSnackbar('已移到对应日期', '', null, 1500)
 }
 
-async function addSinglePhoto(f, dateKey) {
-  if (!f || !dateKey) return
-  showSnackbar('处理中…', '', null, 10000)
-  try {
-    const shot = await readShotTime(f)
-    await addPhoto(dateKey, f)
-    dismissGuide()
-    track('photo_select', { hasExif: !!shot })
-
-    if (!shot) {
-      showSnackbar('未读取到拍摄时间，已放入当前格')
-      return
-    }
-    const shotKey = formatDateKey(shot.getFullYear(), shot.getMonth() + 1, shot.getDate())
-    if (shotKey === dateKey) {
-      showSnackbar('已填入', '', null, 1200)
-      return
-    }
-    const [sy, sm, sd] = shotKey.split('-').map(Number)
-    const sameMonth = sy === year.value && sm === month.value
-    if (sameMonth) {
-      track('exif_mismatch_shown')
-      showSnackbar(
-        `这张拍摄于 ${sm}月${sd}日，已放入 ${month.value}月${dayOf(dateKey)}日`,
-        `移到 ${sm}月${sd}日`,
-        () => {
-          track('exif_move_click')
-          movePhoto(dateKey, shotKey)
-        },
-        4000
-      )
-    } else {
-      showSnackbar(`这张拍摄于 ${sy}年${sm}月${sd}日，已放入当前格`, '', null, 3000)
-    }
-  } catch (err) {
-    showSnackbar('这张图暂时无法识别，请在相册里截图或转成 JPEG 再选', '', null, 3000)
-  }
-}
 
 async function onUploadBg(file) {
   showSnackbar('背景图处理中…', '', null, 3000)
@@ -487,18 +437,20 @@ function showPrivacy() {
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
-      <button class="title-wrap" type="button" @click="openMonthPicker">
+      <label class="title-wrap">
         <span class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</span>
-      </button>
+        <input
+          class="month-title-input"
+          type="month"
+          :value="monthPickerValue"
+          aria-label="选择年月"
+          @change="monthPickerValue = $event.target.value; onMonthChange()"
+        />
+      </label>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
-
-    <div v-if="monthPickerVisible" class="month-picker">
-      <input v-model="monthPickerValue" type="month" aria-label="选择年月" />
-      <div class="month-picker-actions">
-        <button v-if="!isCurrentMonth" class="today-link" @click="goToday">回到本月</button>
-        <button class="month-done" @click="applyMonthPicker">完成</button>
-      </div>
+    <div v-if="!isCurrentMonth" class="today-row">
+      <button class="today-link" @click="goToday">回到本月</button>
     </div>
 
     <CalendarGrid
@@ -601,14 +553,11 @@ function showPrivacy() {
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 
 .nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
-.title-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
-.title { font-size:18px; line-height:1.35; font-weight:600; }
-.month-picker { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0 auto 10px; padding:10px 12px; width:max-content; max-width:100%; border:1px solid rgba(128,128,128,.2); border-radius:12px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px); }
-.month-picker input { min-width:0; border:1px solid rgba(128,128,128,.25); border-radius:8px; padding:7px 9px; font:inherit; font-size:14px; color:#222; background:rgba(255,255,255,.8); }
-.month-picker-actions { display:flex; align-items:center; justify-content:center; gap:18px; min-height:28px; }
-.month-picker-actions button { border:0; background:transparent; font:inherit; font-size:12px; cursor:pointer; }
-.month-picker-actions .today-link { color:#777; }
-.month-picker-actions .month-done { color:#222; font-weight:600; }
+.title-wrap { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; min-height:40px; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
+.title { font-size:18px; line-height:1.35; font-weight:600; pointer-events:none; }
+.month-title-input { position:absolute; inset:0; width:100%; height:100%; opacity:.001; border:0; padding:0; margin:0; cursor:pointer; }
+.today-row { display:flex; justify-content:center; margin:-2px 0 8px; }
+.today-link { border:0; background:transparent; color:#888; padding:3px 8px; font:inherit; font-size:11px; cursor:pointer; }
 .import-actions { display:flex; flex-direction:column; align-items:center; gap:7px; margin:10px 0 12px; }
 .help-link { border:0; background:transparent; padding:3px 8px; font-size:11px; cursor:pointer; opacity:.8; }
 .batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:7px 14px; border-radius:18px; font-size:12px; cursor:pointer; }
