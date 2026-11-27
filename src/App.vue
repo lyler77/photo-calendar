@@ -471,10 +471,12 @@ function showPrivacy() {
         <div class="subtitle" :style="{ color: themeSubColor }">已填 {{ filledCount }} 天</div>
       </div>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
-      <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
     </header>
 
-    <p class="hint" :style="{ color: themeSubColor }">点空白格子添加照片；点已有照片可查看、更换或删除</p>
+    <div class="hint-row">
+      <p class="hint" :style="{ color: themeSubColor }">点空白格子添加照片；点已有照片可查看、更换或删除</p>
+      <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
+    </div>
 
     <CalendarGrid
       :cells="cells"
@@ -572,12 +574,13 @@ function showPrivacy() {
 .bg-overlay { position:fixed; inset:0; z-index:-1; }
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.help-btn { border:0; background:rgba(255,255,255,.4); border-radius:10px; padding:0 10px; height:36px; font-size:12px; cursor:pointer; backdrop-filter:blur(6px); }
+.help-btn { flex:0 0 auto; border:0; background:rgba(255,255,255,.35); border-radius:8px; padding:0 9px; height:28px; font-size:11px; cursor:pointer; backdrop-filter:blur(6px); }
 .nav-btn { width:40px; height:40px; border:none; background:rgba(255,255,255,.4); border-radius:10px; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); }
 .title-wrap { text-align:center; flex:1; cursor:pointer; }
 .title { font-size:18px; font-weight:600; }
 .subtitle { font-size:12px; margin-top:2px; }
-.hint { font-size:12px; text-align:center; margin:4px 0 10px; }
+.hint-row { display:flex; align-items:center; justify-content:center; gap:8px; margin:4px 0 10px; }
+.hint { flex:1; font-size:12px; text-align:center; margin:0; }
 .import-actions { display:flex; justify-content:center; margin:8px 0 12px; }
 .batch-import-btn { border:1px solid rgba(128,128,128,.35); background:rgba(255,255,255,.55); color:inherit; padding:8px 16px; border-radius:18px; font-size:12px; cursor:pointer; }
 .footer-note { font-size:11px; text-align:center; margin-top:16px; }
