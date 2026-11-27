@@ -275,8 +275,8 @@ function confirm() {
     align-content:center;
     align-items:center;
     column-gap:8px;
-    row-gap:6px;
-    min-height:82px;
+    row-gap:4px;
+    min-height:72px;
     padding:9px;
   }
   .batch-item > img,.batch-item > .image-placeholder {
