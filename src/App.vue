@@ -7,6 +7,7 @@ import SnackBar from './components/SnackBar.vue'
 import StyleDrawer from './components/StyleDrawer.vue'
 import ExportSheet from './components/ExportSheet.vue'
 import OnboardingGuide from './components/OnboardingGuide.vue'
+import BatchImportSheet from './components/BatchImportSheet.vue'
 import { buildMonthGrid, prevMonth, nextMonth, formatDateKey } from './composables/useCalendar'
 import { usePhotos } from './composables/usePhotos'
 import { useStyle, TEMPLATES, FILTERS } from './composables/useStyle'
@@ -23,7 +24,8 @@ const pickingDateKey = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
-const guideVisible = ref(false) // 新增：引导状态
+const guideVisible = ref(false)
+const batchVisible = ref(false) // 批量导入弹窗
 
 const exportVisible = ref(false)
 const exportLoading = ref(false)
@@ -72,7 +74,6 @@ onMounted(async () => {
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
 
-  // 新增：首次进入且没有照片，且没被提示过，则延迟 300ms 弹出引导
   if (Object.keys(photos).length === 0 && !localStorage.getItem('guide_shown')) {
     setTimeout(() => { guideVisible.value = true }, 300)
   }
@@ -93,13 +94,10 @@ watch(
   { deep: true, immediate: true }
 )
 
-// 新增：关闭引导并记录
 function closeGuide() {
   guideVisible.value = false
   localStorage.setItem('guide_shown', '1')
 }
-
-// 新增：手动唤起引导
 function showGuideManually() {
   guideVisible.value = true
 }
@@ -224,6 +222,26 @@ async function onFileChange(e) {
   }
 }
 
+// --- 批量导入逻辑 ---
+
+async function onBatchConfirm(items) {
+  batchVisible.value = false
+  showSnackbar('批量处理中，请稍候…', '', null, 3000)
+  
+  for (const item of items) {
+    try {
+      await addPhoto(item.dateKey, item.file)
+    } catch (e) {
+      console.warn('批量导入跳过一张错误图', e)
+    }
+  }
+  
+  track('batch_import', { count: items.length })
+  showSnackbar(`成功导入 ${items.length} 张照片！`)
+}
+
+// --- 导出逻辑 ---
+
 async function onUploadBg(file) {
   showSnackbar('背景图处理中…', '', null, 3000)
   try {
@@ -234,8 +252,6 @@ async function onUploadBg(file) {
     showSnackbar('背景图加载失败，请换一张试试', '', null, 3000)
   }
 }
-
-// --- 导出逻辑 ---
 
 async function doGenerateExport() {
   exportLoading.value = true
@@ -344,7 +360,12 @@ function showPrivacy() {
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
 
-    <p class="hint" :style="{ color: themeSubColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
+    <div class="toolbar" :style="{ color: themeSubColor }">
+      <p class="hint">点空白格子选图；点已有照片可查看、更换或删除</p>
+      <button class="batch-btn" :style="{ backgroundColor: hasBgImage ? 'rgba(255,255,255,0.2)' : '#fff', color: themeTextColor }" @click="batchVisible = true">
+        ⊞ 批量导入
+      </button>
+    </div>
 
     <CalendarGrid
       :cells="cells"
@@ -359,7 +380,6 @@ function showPrivacy() {
 
     <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
 
-    <!-- 底部说明，增加了“查看示例”入口 -->
     <p class="footer-note" :style="{ color: themeSubColor }">
       作品仅保存在本机浏览器，<span style="text-decoration:underline;cursor:pointer" @click="showPrivacy">隐私说明</span>
       <span style="margin: 0 6px; opacity: 0.5;">|</span>
@@ -371,7 +391,15 @@ function showPrivacy() {
       <button class="bar-btn primary" @click="openExport">导出</button>
     </div>
 
-    <!-- 挂载引导组件 -->
+    <BatchImportSheet
+      :visible="batchVisible"
+      :year="year"
+      :month="month"
+      :existing-photos="photos"
+      @confirm="onBatchConfirm"
+      @close="batchVisible = false"
+    />
+
     <OnboardingGuide :visible="guideVisible" @close="closeGuide" />
 
     <StyleDrawer
@@ -427,7 +455,9 @@ function showPrivacy() {
 .title-wrap { text-align: center; flex: 1; cursor: pointer; }
 .title { font-size: 18px; font-weight: 600; }
 .subtitle { font-size: 12px; margin-top: 2px; }
-.hint { font-size: 12px; text-align: center; margin: 4px 0 10px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 10px; padding: 0 4px; }
+.hint { font-size: 12px; margin: 0; flex: 1; }
+.batch-btn { padding: 6px 12px; border: none; border-radius: 16px; font-size: 12px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .footer-note { font-size: 11px; text-align: center; margin-top: 16px; }
 .bottom-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; gap: 10px; }
 .bar-btn { padding: 12px 28px; border: none; border-radius: 24px; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
