@@ -14,7 +14,7 @@ const emit = defineEmits(['close', 'confirm', 'update:items'])
 const localItems = ref([])
 const startDate = ref('')
 const placementMode = ref('replace')
-let draggingId = null
+const draggingId = ref('')
 let pointerId = null
 
 watch(
@@ -163,21 +163,21 @@ function moveItem(from, to) {
 }
 function onPointerDown(event, id) {
   if (localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
-  draggingId = id
+  draggingId.value = id
   pointerId = event.pointerId
   event.currentTarget.closest('.batch-list')?.setPointerCapture?.(event.pointerId)
 }
 function onPointerMove(event) {
-  if (!draggingId || (pointerId !== null && event.pointerId !== pointerId)) return
+  if (!draggingId.value || (pointerId !== null && event.pointerId !== pointerId)) return
   const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-batch-id]')
   const targetId = target?.getAttribute('data-batch-id')
-  if (!targetId || targetId === draggingId) return
-  const from = localItems.value.findIndex(item => item.id === draggingId)
+  if (!targetId || targetId === draggingId.value) return
+  const from = localItems.value.findIndex(item => item.id === draggingId.value)
   const to = localItems.value.findIndex(item => item.id === targetId)
   if (from >= 0 && to >= 0) moveItem(from, to)
 }
 function onPointerUp() {
-  draggingId = null
+  draggingId.value = ''
   pointerId = null
 }
 function formatShotDate(value) {
