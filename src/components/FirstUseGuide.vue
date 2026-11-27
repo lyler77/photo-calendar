@@ -49,7 +49,7 @@ defineEmits(['start', 'close'])
           </li>
           <li>
             <span class="step-number">04</span>
-            <div><strong>调整并导出</strong><small>在「样式」中更换模板、背景和滤镜；点击「导出」保存单月或全年月历。</small></div>
+            <div><strong>调整并导出</strong><small>点击顶部年月可跳转到其他月份，也可返回本月；在「样式」中更换模板、背景和滤镜，点击「导出」保存单月或全年月历。</small></div>
           </li>
         </ol>
 
