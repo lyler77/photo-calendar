@@ -20,13 +20,13 @@ const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
 
-const fileInput = ref(null)
 const batchFileInput = ref(null)
 const batchVisible = ref(false)
 const batchBusy = ref(false)
 const batchItems = ref([])
 const guideVisible = ref(false)
 const pickingDateKey = ref('')
+const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
@@ -135,10 +135,13 @@ function onSnackbarAction() {
 
 function openPicker(dateKey) {
   pickingDateKey.value = dateKey
-  fileInput.value?.click()
+  batchInitialDate.value = dateKey
+  batchFileInput.value?.click()
 }
 
 function openBatchPicker() {
+  pickingDateKey.value = ''
+  batchInitialDate.value = year.value + '-' + String(month.value).padStart(2, '0') + '-01'
   batchFileInput.value?.click()
 }
 
@@ -166,6 +169,13 @@ async function onBatchFileChange(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
   if (!files.length) return
+  if (pickingDateKey.value && files.length === 1) {
+    const dateKey = pickingDateKey.value
+    pickingDateKey.value = ''
+    await addSinglePhoto(files[0], dateKey)
+    return
+  }
+  pickingDateKey.value = ''
 
   releaseBatchPreviews()
   showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
@@ -304,15 +314,9 @@ function movePhoto(fromKey, toKey) {
   showSnackbar('已移到对应日期', '', null, 1500)
 }
 
-async function onFileChange(e) {
-  const f = e.target.files?.[0]
-  e.target.value = ''
-  const dateKey = pickingDateKey.value
-  pickingDateKey.value = ''
+async function addSinglePhoto(f, dateKey) {
   if (!f || !dateKey) return
-
   showSnackbar('处理中…', '', null, 10000)
-
   try {
     const shot = await readShotTime(f)
     await addPhoto(dateKey, f)
@@ -470,7 +474,7 @@ function showPrivacy() {
       <button class="help-btn" :style="{ color: themeTextColor }" @click="guideVisible = true">帮助</button>
     </header>
 
-    <p class="hint" :style="{ color: themeSubColor }">点空白格子选图；点已有照片可查看、更换或删除</p>
+    <p class="hint" :style="{ color: themeSubColor }">点空白格子添加照片；点已有照片可查看、更换或删除</p>
 
     <CalendarGrid
       :cells="cells"
@@ -484,9 +488,8 @@ function showPrivacy() {
     />
 
     <div class="import-actions">
-      <button class="batch-import-btn" @click="openBatchPicker">批量导入照片</button>
+      <button class="batch-import-btn" @click="openBatchPicker">添加照片</button>
     </div>
-    <input ref="fileInput" type="file" accept="image/*" hidden @change="onFileChange" />
     <input ref="batchFileInput" type="file" accept="image/*" multiple hidden @change="onBatchFileChange" />
 
     <p class="footer-note" :style="{ color: themeSubColor }">
@@ -513,7 +516,7 @@ function showPrivacy() {
       :visible="batchVisible"
       :items="batchItems"
       :existing-keys="Object.keys(photos)"
-      :initial-date="year + '-' + String(month).padStart(2, '0') + '-01'"
+      :initial-date="batchInitialDate"
       :busy="batchBusy"
       @update:items="updateBatchItems"
       @confirm="confirmBatchImport"
