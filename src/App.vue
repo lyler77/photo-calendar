@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
   if (exportPreviewUrl.value) URL.revokeObjectURL(exportPreviewUrl.value)
 })
 
-watch([year, month], () => { scheduleSave() })
+watch([year, month], () => {\n  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')\n  scheduleSave()\n})
 
 watch(
   () => ({ ...style }),
