@@ -117,7 +117,6 @@ function onPointerMove(event) {
   const to = localItems.value.findIndex(item => item.id === targetId)
   if (from >= 0 && to >= 0) {
     moveItem(from, to)
-    draggingId = targetId
   }
 }
 function onPointerUp() {
