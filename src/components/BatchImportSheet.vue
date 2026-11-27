@@ -75,17 +75,14 @@ function assignMissingDates() {
         continue
       }
       if (item.manualDate && item.targetDate) {
-        if (placementMode.value === 'skip') {
-          while (occupied.has(item.targetDate) || reserved.has(item.targetDate)) {
-            item.targetDate = nextKey(item.targetDate)
-          }
-        }
+        // 手动指定的日期始终保持不变；重复日期交由校验提示，不自动挪动。
         reserved.add(item.targetDate)
-        cursor = nextKey(item.targetDate)
         continue
       }
       if (placementMode.value === 'skip') {
         while (occupied.has(cursor) || reserved.has(cursor)) cursor = nextKey(cursor)
+      } else {
+        while (reserved.has(cursor)) cursor = nextKey(cursor)
       }
       item.targetDate = cursor
       reserved.add(cursor)
@@ -140,8 +137,9 @@ const errorCount = computed(() => localItems.value.filter(item => item.error).le
 function updateItem(index, field, value) {
   localItems.value[index][field] = value
   if (field === 'targetDate') {
+    // 修改一张照片的日期，不联动重排其他照片。
     localItems.value[index].manualDate = !!value
-    assignMissingDates()
+    emitItems()
     return
   }
   emitItems()
