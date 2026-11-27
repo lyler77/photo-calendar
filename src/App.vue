@@ -30,7 +30,10 @@ const batchInitialDate = ref('')
 const selectedDateKey = ref('')
 const viewingUrl = ref('')
 const styleDrawerVisible = ref(false)
-const monthPickerValue = ref(year.value + '-' + String(month.value).padStart(2, '0'))
+const monthPickerVisible = ref(false)
+const draftYear = ref(year.value)
+const draftMonth = ref(month.value)
+const yearOptions = Array.from({ length: 201 }, (_, i) => 1900 + i)
 const isCurrentMonth = computed(() => {
   const current = new Date()
   return year.value === current.getFullYear() && month.value === current.getMonth() + 1
@@ -88,7 +91,6 @@ onBeforeUnmount(() => {
 })
 
 watch([year, month], () => {
-  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
   scheduleSave()
 })
 
@@ -117,14 +119,19 @@ function goToday() {
   const d = new Date()
   year.value = d.getFullYear()
   month.value = d.getMonth() + 1
-  monthPickerValue.value = year.value + '-' + String(month.value).padStart(2, '0')
 }
-function onMonthChange() {
-  if (!/^\d{4}-\d{2}$/.test(monthPickerValue.value)) return
-  const [y, m] = monthPickerValue.value.split('-').map(Number)
-  if (m < 1 || m > 12) return
-  year.value = y
-  month.value = m
+function openMonthPicker() {
+  draftYear.value = year.value
+  draftMonth.value = month.value
+  monthPickerVisible.value = true
+}
+function confirmMonthPicker() {
+  year.value = draftYear.value
+  month.value = draftMonth.value
+  monthPickerVisible.value = false
+}
+function cancelMonthPicker() {
+  monthPickerVisible.value = false
 }
 
 function showSnackbar(message, actionLabel = '', onAction = null, duration = 2500) {
@@ -437,22 +444,24 @@ function showPrivacy() {
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
-      <label class="title-wrap">
+      <button class="title-wrap" type="button" @click="openMonthPicker">
         <span class="title" :style="{ color: themeTextColor }">{{ year }} 年 {{ month }} 月</span>
-        <input
-          class="month-title-input"
-          type="month"
-          :value="monthPickerValue"
-          aria-label="选择年月"
-          @change="monthPickerValue = $event.target.value; onMonthChange()"
-        />
-      </label>
+      </button>
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goNext">›</button>
     </header>
     <div v-if="!isCurrentMonth" class="today-row">
       <button class="today-link" @click="goToday">回到本月</button>
     </div>
 
+    <div v-if="monthPickerVisible" class="month-picker-mask" @click.self="cancelMonthPicker">
+      <section class="month-picker-panel" role="dialog" aria-modal="true" aria-label="选择年月">
+        <header><button type="button" @click="cancelMonthPicker">取消</button><strong>选择年月</strong><button type="button" @click="confirmMonthPicker">完成</button></header>
+        <div class="month-picker-fields">
+          <label><select v-model.number="draftYear" aria-label="年份"><option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option></select></label>
+          <label><select v-model.number="draftMonth" aria-label="月份"><option v-for="m in 12" :key="m" :value="m">{{ m }} 月</option></select></label>
+        </div>
+      </section>
+    </div>
     <CalendarGrid
       :cells="cells"
       :photos="photos"
@@ -552,10 +561,16 @@ function showPrivacy() {
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
 .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 
-.nav-btn { display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
-.title-wrap { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; min-height:40px; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
+.nav-btn { touch-action:manipulation; -webkit-tap-highlight-color:transparent; display:flex; align-items:center; justify-content:center; flex:0 0 40px; width:40px; height:40px; padding:0; line-height:1; border:1px solid rgba(128,128,128,.16); -webkit-appearance:none; appearance:none; background:rgba(255,255,255,.4); border-radius:10px; font-family:inherit; font-size:22px; cursor:pointer; backdrop-filter:blur(6px); box-sizing:border-box; }
+.title-wrap { -webkit-appearance:none; appearance:none; color:inherit; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; min-width:0; min-height:40px; padding:0; border:0; background:transparent; font:inherit; cursor:pointer; }
 .title { font-size:18px; line-height:1.35; font-weight:600; pointer-events:none; }
-.month-title-input { position:absolute; inset:0; width:100%; height:100%; opacity:.001; border:0; padding:0; margin:0; cursor:pointer; }
+.month-picker-mask { position:fixed; inset:0; z-index:220; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.42); }
+.month-picker-panel { width:min(100%,360px); padding:18px; border-radius:16px; background:#fff; color:#222; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+.month-picker-panel header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; }
+.month-picker-panel header button { border:0; background:transparent; color:#555; padding:8px 4px; font:inherit; font-size:14px; }
+.month-picker-panel header button:last-child { color:#222; font-weight:600; }
+.month-picker-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.month-picker-fields select { width:100%; padding:12px 10px; border:1px solid #ddd; border-radius:10px; background:#fff; color:#222; font:inherit; font-size:16px; }
 .today-row { display:flex; justify-content:center; margin:-2px 0 8px; }
 .today-link { border:0; background:transparent; color:#888; padding:3px 8px; font:inherit; font-size:11px; cursor:pointer; }
 .import-actions { display:flex; flex-direction:column; align-items:center; gap:7px; margin:10px 0 12px; }
