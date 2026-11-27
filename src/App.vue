@@ -54,7 +54,7 @@ const {
   applyLoaded, getSnapshot
 } = useStyle()
 
-const { photos, init, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
+const { photos, init, loadError, addPreparedPhotos, removePhoto, scheduleSave } = usePhotos({
   yearRef: year,
   monthRef: month,
   getStyleSnapshot: getSnapshot,
@@ -78,6 +78,7 @@ onMounted(async () => {
   track('app_open')
   const loadedStyle = await init()
   if (loadedStyle) applyLoaded(loadedStyle)
+  if (loadError.value) return
   try {
     guideVisible.value = Object.keys(photos).length === 0 &&
       localStorage.getItem('photo_calendar_guide_seen') !== '1'
@@ -191,7 +192,7 @@ async function onBatchFileChange(event) {
   showSnackbar('正在读取 ' + files.length + ' 张照片…', '', null, 10000)
 
   // 每张图片独立检查解码能力；单张不支持不会影响其他照片
-  const results = await Promise.all(files.map(async (file, index) => {
+  const results = await mapWithConcurrency(files, 2, async (file, index) => {
     const id = 'batch-' + Date.now() + '-' + index
     const name = file.name || ('照片 ' + (index + 1))
     try {
@@ -223,7 +224,7 @@ async function onBatchFileChange(event) {
         error: '格式暂不支持或图片已损坏，请移除后换用 JPG、PNG 或 WebP'
       }
     }
-  }))
+  })
 
   batchItems.value = results
   batchVisible.value = true
@@ -244,6 +245,25 @@ function closeBatch() {
   releaseBatchPreviews()
 }
 
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  async function worker() {
+    while (true) {
+      const index = nextIndex++
+      if (index >= items.length) return
+      results[index] = await mapper(items[index], index)
+    }
+  }
+  const workerCount = Math.min(Math.max(1, limit), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
+function reloadAfterStorageError() {
+  window.location.reload()
+}
+
 async function confirmBatchImport(items) {
   const seen = new Set()
   for (const item of items) {
@@ -262,14 +282,14 @@ async function confirmBatchImport(items) {
   batchBusy.value = true
   showSnackbar('正在处理照片，请稍候…', '', null, 10000)
   try {
-    const results = await Promise.all(items.map(async item => {
+    const results = await mapWithConcurrency(items, 2, async item => {
       try {
         const image = await compressImage(item.file, 2000)
         return { dateKey: item.targetDate, ...image, error: '' }
       } catch (error) {
         return { dateKey: item.targetDate, error: error?.message || '图片处理失败' }
       }
-    }))
+    })
     const succeeded = results.filter(item => !item.error)
     if (succeeded.length) {
       addPreparedPhotos(succeeded)
@@ -441,6 +461,14 @@ function showPrivacy() {
     :style="{ backgroundColor: `rgba(0, 0, 0, ${style.backgroundOverlayOpacity})` }"
   />
 
+  <div v-if="loadError" class="storage-error-mask">
+    <section class="storage-error-panel" role="alert">
+      <h2>暂时无法读取本地作品</h2>
+      <p>为了避免覆盖原有照片和设置，已暂停编辑与自动保存。请先刷新页面重试，不要清除浏览器数据。</p>
+      <button type="button" @click="reloadAfterStorageError">刷新页面</button>
+    </section>
+  </div>
+
   <main class="app">
     <header class="header">
       <button class="nav-btn" :style="{ color: themeTextColor }" @click="goPrev">‹</button>
@@ -556,6 +584,11 @@ function showPrivacy() {
 </template>
 
 <style scoped>
+.storage-error-mask { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,0,0,.55); }
+.storage-error-panel { width:min(100%,380px); padding:24px; border-radius:16px; background:#fff; color:#222; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+.storage-error-panel h2 { margin:0 0 12px; font-size:18px; }
+.storage-error-panel p { margin:0 0 20px; color:#666; font-size:14px; line-height:1.7; }
+.storage-error-panel button { width:100%; padding:12px; border:0; border-radius:9px; background:#222; color:#fff; font:inherit; }
 .bg-layer { position:fixed; inset:0; background-size:cover; background-position:center; z-index:-2; }
 .bg-overlay { position:fixed; inset:0; z-index:-1; }
 .app { max-width:560px; margin:0 auto; padding:12px 14px 120px; font-family:-apple-system,'PingFang SC',sans-serif; color:#222; min-height:100vh; }
