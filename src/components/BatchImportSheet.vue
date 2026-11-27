@@ -161,32 +161,21 @@ function moveItem(from, to) {
   localItems.value = next
   assignMissingDates()
 }
-function onDragStart(event, id) {
-  if (localItems.value.find(item => item.id === id)?.error) {
-    event.preventDefault()
-    return
-  }
-  draggingId = id
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', id)
-}
 function onDrop(event, targetId) {
   event.preventDefault()
-  const id = draggingId || event.dataTransfer.getData('text/plain')
-  const from = localItems.value.findIndex(item => item.id === id)
+  const from = localItems.value.findIndex(item => item.id === draggingId)
   const to = localItems.value.findIndex(item => item.id === targetId)
   if (from >= 0 && to >= 0) moveItem(from, to)
   draggingId = null
 }
 function onPointerDown(event, id) {
-  if (event.pointerType === 'mouse' || localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
+  if (localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
   draggingId = id
   pointerId = event.pointerId
-  // 在列表容器上捕获指针，确保 pointermove 能到达列表监听器。
   event.currentTarget.closest('.batch-list')?.setPointerCapture?.(event.pointerId)
 }
 function onPointerMove(event) {
-  if (!draggingId || event.pointerType === 'mouse' || (pointerId !== null && event.pointerId !== pointerId)) return
+  if (!draggingId || (pointerId !== null && event.pointerId !== pointerId)) return
   const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-batch-id]')
   const targetId = target?.getAttribute('data-batch-id')
   if (!targetId || targetId === draggingId) return
@@ -246,12 +235,8 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
             :key="item.id"
             class="batch-item"
             :data-batch-id="item.id"
-            :draggable="!item.error && !busy"
-            @dragstart="onDragStart($event, item.id)"
-            @pointerdown="onPointerDown($event, item.id)"
             :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)) || duplicateKeys.has(item.targetDate), unsupported: item.error }"
-            @dragover.prevent
-            @drop="onDrop($event, item.id)"
+            @pointerdown="onPointerDown($event, item.id)"
           >
             <img v-if="item.previewUrl" :src="item.previewUrl" alt="" />
             <div v-else class="image-placeholder">!</div>
@@ -307,7 +292,6 @@ onBeforeUnmount(() => { draggingId = null; pointerId = null })
 .batch-list { display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; padding:2px; touch-action:pan-y; }
 .batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:7px; min-width:0; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; }
 .batch-item:active { cursor:grabbing; }
-.batch-item[draggable="true"] { -webkit-user-drag:element; }
 .batch-item.invalid { border-color:#e6b49d; background:#fffaf7; }
 .batch-item.unsupported { background:#fafafa; border-style:dashed; }
 .batch-item img,.image-placeholder { width:48px; height:48px; object-fit:cover; border-radius:6px; background:#eee; }
