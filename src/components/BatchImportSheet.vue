@@ -230,7 +230,7 @@ onBeforeUnmount(() => { draggingId = null })
             :draggable="!item.error && !busy"
             @dragstart="onDragStart($event, item.id)"
             @pointerdown="onPointerDown($event, item.id)"
-            :class="{ invalid: item.error || !item.targetDate || occupiedSet.has(item.targetDate) || duplicateKeys.has(item.targetDate), unsupported: item.error }"
+            :class="{ invalid: item.error || !item.targetDate || (occupiedSet.has(item.targetDate) && !isReplacement(item)) || duplicateKeys.has(item.targetDate), unsupported: item.error }"
             @dragover.prevent
             @drop="onDrop($event, item.id)"
           >
