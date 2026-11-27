@@ -203,11 +203,9 @@ function confirm() {
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
-              <small v-else-if="item.shotDate">拍摄于 {{ formatShotDate(item.shotDate) }}</small>
-              <small v-else>未读到拍摄日期</small>
-              <small v-if="!item.error && isReplacement(item)" class="replace-notice">将替换原照片</small>
-              <small v-else-if="!item.error && item.targetDate && occupiedSet.has(item.targetDate)" class="warning">日期已有照片</small>
-              <small v-else-if="!item.error && item.targetDate && duplicateKeys.has(item.targetDate)" class="warning">日期重复</small>
+              <small v-else>
+                {{ item.shotDate ? '拍摄于 ' + formatShotDate(item.shotDate) : '未读到拍摄日期' }}<template v-if="isReplacement(item)"> · <span class="replace-notice">将替换原照片</span></template><template v-else-if="item.targetDate && occupiedSet.has(item.targetDate)"> · <span class="warning">日期已有照片</span></template><template v-else-if="item.targetDate && duplicateKeys.has(item.targetDate)"> · <span class="warning">日期重复</span></template>
+              </small>
             </div>
             <input
               class="target-date"
@@ -273,7 +271,7 @@ function confirm() {
   .batch-item {
     flex:0 0 auto;
     grid-template-columns:42px minmax(0,1fr) 32px;
-    grid-template-rows:minmax(16px,auto) auto;
+    grid-template-rows:auto auto;
     align-content:center;
     align-items:center;
     column-gap:8px;
@@ -313,6 +311,6 @@ function confirm() {
     height:32px;
   }
   .batch-item img,.image-placeholder { width:42px; height:42px; }
-  .item-info small { font-size:11px; }
+  .item-info small { font-size:11px; line-height:1.25; }
 }
 </style>
