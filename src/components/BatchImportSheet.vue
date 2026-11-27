@@ -14,8 +14,6 @@ const emit = defineEmits(['close', 'confirm', 'update:items'])
 const localItems = ref([])
 const startDate = ref('')
 const placementMode = ref('replace')
-const draggingId = ref('')
-let pointerId = null
 
 watch(
   () => [props.visible, props.initialDate, props.anchorDate],
@@ -152,34 +150,6 @@ function removeItem(index) {
   localItems.value.splice(index, 1)
   assignMissingDates()
 }
-function moveItem(from, to) {
-  if (to < 0 || to >= localItems.value.length || from === to) return
-  if (localItems.value[from]?.error || localItems.value[to]?.error) return
-  const next = [...localItems.value]
-  const [item] = next.splice(from, 1)
-  next.splice(to, 0, item)
-  localItems.value = next
-  assignMissingDates()
-}
-function onPointerDown(event, id) {
-  if (localItems.value.find(item => item.id === id)?.error || event.target.closest('button, input')) return
-  draggingId.value = id
-  pointerId = event.pointerId
-  event.currentTarget.closest('.batch-list')?.setPointerCapture?.(event.pointerId)
-}
-function onPointerMove(event) {
-  if (!draggingId.value || (pointerId !== null && event.pointerId !== pointerId)) return
-  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-batch-id]')
-  const targetId = target?.getAttribute('data-batch-id')
-  if (!targetId || targetId === draggingId.value) return
-  const from = localItems.value.findIndex(item => item.id === draggingId.value)
-  const to = localItems.value.findIndex(item => item.id === targetId)
-  if (from >= 0 && to >= 0) moveItem(from, to)
-}
-function onPointerUp() {
-  draggingId.value = ''
-  pointerId = null
-}
 function formatShotDate(value) {
   if (!value) return ''
   const [year, month, day] = value.split('-').map(Number)
@@ -192,7 +162,7 @@ function confirm() {
     replaceExisting: isReplacement(item)
   })))
 }
-onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
+
 </script>
 
 <template>
@@ -222,7 +192,7 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
           </div>
         </section>
 
-        <div class="batch-list" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
+        <div class="batch-list">
           <article
             v-for="(item, index) in localItems"
             :key="item.id"
@@ -235,7 +205,9 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
             <div v-else class="image-placeholder">!</div>
             <div class="item-info">
               <small v-if="item.error" class="warning">{{ item.error }}</small>
-              <small v-else-if="!propsAnchorMode && item.shotDate">{{ formatShotDate(item.shotDate) }}</small>
+              <small v-else-if="propsAnchorMode">按选择顺序安排</small>
+              <small v-else-if="item.shotDate">照片拍摄日期：{{ formatShotDate(item.shotDate) }}</small>
+              <small v-else>未读到拍摄日期</small>
               <small v-if="!item.error && isReplacement(item)" class="replace-notice">将替换原照片</small>
               <small v-else-if="!item.error && item.targetDate && occupiedSet.has(item.targetDate)" class="warning">日期已有照片</small>
               <small v-else-if="!item.error && item.targetDate && duplicateKeys.has(item.targetDate)" class="warning">日期重复</small>
@@ -245,7 +217,7 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
               type="date"
               :value="item.targetDate || ''"
               :disabled="!!item.error || busy"
-              :aria-label="'为' + item.name + '设置日期'"
+              :aria-label="'安排日期'"
               @change="updateItem(index, 'targetDate', $event.target.value)"
             />
             <button class="remove" :disabled="busy" aria-label="从本次导入中删除" title="从本次导入中删除" @click="removeItem(index)">×</button>
@@ -267,10 +239,9 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
 <style scoped>
 .batch-mask { position:fixed; inset:0; z-index:180; background:rgba(0,0,0,.48); display:flex; align-items:flex-end; justify-content:center; }
 .batch-sheet { width:100%; max-width:620px; max-height:92vh; overflow:auto; background:#fff; color:#222; border-radius:16px 16px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom)); box-sizing:border-box; }
-.batch-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-.batch-header h2 { font-size:18px; margin:0 0 5px; font-weight:600; }
-.batch-header p { color:#888; font-size:12px; margin:0; }
-.close { border:0; background:#f3f3f3; border-radius:50%; width:32px; height:32px; font-size:22px; color:#555; }
+.batch-header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.batch-header h2 { font-size:18px; margin:0; font-weight:600; }
+.close { display:flex; align-items:center; justify-content:center; flex:0 0 34px; width:34px; height:34px; padding:0; border:0; background:#f3f3f3; border-radius:50%; font-size:22px; line-height:1; color:#555; }
 .batch-summary { display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:12px; color:#777; margin:16px 0 12px; }
 .batch-summary strong { color:#222; font-size:14px; }
 .warning { color:#c65d3a !important; }
@@ -282,19 +253,17 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
 .date-control { display:flex; align-items:center; justify-content:flex-start; gap:10px; }
 .date-control label { font-size:11px; color:#777; }
 .date-control input { width:145px; border:1px solid #ddd; border-radius:7px; padding:6px 8px; font:inherit; color:#333; background:#fff; font-size:12px; }
-.batch-list { display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; padding:2px; touch-action:pan-y; }
-.batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 128px 28px; align-items:center; gap:9px; border:1px solid #eee; border-radius:10px; padding:7px; min-width:0; cursor:grab; user-select:none; -webkit-user-select:none; touch-action:none; }
-.batch-item:active { cursor:grabbing; }
-.batch-item.dragging { border-color:#999; box-shadow:0 4px 14px rgba(0,0,0,.12); opacity:.72; }
+.batch-list { display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; padding:2px; }
+.batch-item { display:grid; grid-template-columns:48px minmax(0,1fr) 132px 32px; align-items:center; gap:9px; min-width:0; min-height:66px; box-sizing:border-box; border:1px solid #eee; border-radius:10px; padding:8px; }
 .batch-item.invalid { border-color:#e6b49d; background:#fffaf7; }
 .batch-item.unsupported { background:#fafafa; border-style:dashed; }
-.batch-item img,.image-placeholder { width:48px; height:48px; object-fit:cover; border-radius:6px; background:#eee; }
+.batch-item img,.image-placeholder { display:block; width:48px; height:48px; object-fit:cover; border-radius:6px; background:#eee; }
 .image-placeholder { display:flex; align-items:center; justify-content:center; color:#c65d3a; font-weight:600; }
-.item-info { min-width:0; display:flex; flex-direction:column; gap:3px; }
-.item-info small { font-size:10px; color:#888; line-height:1.35; }
-.target-date { width:100%; min-width:0; box-sizing:border-box; border:1px solid #ddd; border-radius:7px; padding:7px; font:inherit; color:#333; background:#fff; font-size:12px; }
+.item-info { min-width:0; display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+.item-info small { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:#888; line-height:1.35; }
+.target-date { width:100%; min-width:0; box-sizing:border-box; border:1px solid #ddd; border-radius:7px; padding:7px 5px; font:inherit; color:#333; background:#fff; font-size:12px; }
 .target-date:disabled { opacity:.35; }
-.remove { width:27px; height:27px; border:0; border-radius:7px; background:#fff0eb; color:#b75a3b; font-size:17px; }
+.remove { display:flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; border:0; border-radius:8px; background:#fff0eb; color:#b75a3b; font-size:18px; line-height:1; }
 .empty-list { text-align:center; color:#999; font-size:12px; padding:20px 0; }
 .batch-actions { display:flex; gap:10px; margin-top:14px; }
 .batch-actions button { border:0; border-radius:10px; padding:13px; font-size:14px; }
@@ -302,9 +271,10 @@ onBeforeUnmount(() => { draggingId.value = ''; pointerId = null })
 .batch-actions .primary { flex:2; background:#222; color:#fff; }
 .batch-actions button:disabled { opacity:.4; }
 @media (max-width:420px) {
-  .batch-item { grid-template-columns:42px minmax(0,1fr) 28px; gap:7px; }
+  .batch-sheet { padding-left:14px; padding-right:14px; }
+  .batch-item { grid-template-columns:42px minmax(0,1fr) 112px 30px; gap:6px; min-height:60px; padding:7px; }
   .batch-item img,.image-placeholder { width:42px; height:42px; }
-  .target-date { grid-column:2 / 3; }
-  .remove { grid-column:3; grid-row:1 / span 2; }
+  .target-date { font-size:11px; padding:7px 3px; }
+  .remove { width:28px; height:28px; }
 }
 </style>
