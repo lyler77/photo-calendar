@@ -67,7 +67,7 @@ defineEmits(['start', 'close'])
 .guide-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .eyebrow { font-size:11px; color:var(--guide-muted); margin-bottom:7px; }
 h2 { font-size:19px; line-height:1.35; margin:0; font-weight:600; letter-spacing:-.3px; }
-.guide-close { flex:0 0 auto; width:30px; height:30px; border:0; border-radius:50%; background:rgba(128,128,128,.12); color:var(--guide-text); font-size:20px; }
+.guide-close { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; box-sizing:border-box; padding:0; margin:0; border:0; -webkit-appearance:none; appearance:none; border-radius:50%; background:rgba(128,128,128,.12); color:var(--guide-text); font-family:Arial,sans-serif; font-size:20px; line-height:1; text-align:center; }
 .intro { color:var(--guide-muted); font-size:12px; line-height:1.65; margin:10px 0 16px; }
 .steps { list-style:none; padding:0; margin:0 0 18px; display:flex; flex-direction:column; gap:0; }
 .steps li { display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:start; padding:12px 0; border-top:1px solid var(--guide-border); }
